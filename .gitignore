@@ -1,0 +1,7 @@
+*.txt
+*.cys
+*.graphml
+*.csv
+output/
+data/
+__pycache__/
