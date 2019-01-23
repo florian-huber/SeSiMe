@@ -145,7 +145,7 @@ def loadBGC_from_cluster_files(network_file_list, ann_file_list, antismash_dir=N
     bgc_list = []
 
     # TODO might need to change this later depending on packaging etc
-    with open(os.path.join(os.path.dirname(__file__), 'strain_ids.csv'), 'r') as f:
+    with open(os.path.join(os.path.dirname(__file__), 'data\\strain_ids.csv'), 'r') as f:
         reader = csv.reader(f)
         for line in reader:
             strain_id_dict[line[0]] = line[1]

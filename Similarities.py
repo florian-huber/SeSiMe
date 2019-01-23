@@ -44,7 +44,7 @@ class SimilarityMeasures():
 
         self.X_data = None
         
-        # trained models
+        # Trained models
         self.model_word2vec = None
         self.model_doc2vec = None
         self.model_lda = None
@@ -55,6 +55,18 @@ class SimilarityMeasures():
         self.vectors_centroid = []
         self.vectors_ae = []
         self.vectors_pca = []
+        
+        # Listed distances
+        self.Cdistances_ctr = None
+        self.Cdistances_ctr_idx = None
+        self.Cdistances_ae = None
+        self.Cdistances_ae_idx = None
+        self.Cdistances_pca = None
+        self.Cdistances_pca_idx = None
+        self.Cdistances_lda = None
+        self.Cdistances_lda_idx = None
+        self.Cdistances_lsi = None
+        self.Cdistances_lsi_idx = None
 
 
     def preprocess_documents(self, max_fraction, create_stopwords = False):
@@ -279,17 +291,17 @@ class SimilarityMeasures():
                     self.X_data[i,:] = functions.full_wv(input_dim, word_vector_bow, word_vector_count)
                 
             # Shuffling
-            shuffled_ids = np.arange(0, len(self.corpus))
-            np.random.shuffle(shuffled_ids) 
+            shuffled_idx = np.arange(0, len(self.corpus))
+            np.random.shuffle(shuffled_idx) 
             
             split_training = [0.8, 0.1, 0.1]
             print("split data into traning/testing/validation with fractions: ", split_training)
             
             split = [int(corpus_dim *split_training[0]), int(corpus_dim *(split_training[1]+split_training[0]))]
             
-            x_train = self.X_data[shuffled_ids[:split[0]]]
-            x_test = self.X_data[shuffled_ids[split[0]:split[1]]]
-            x_valid = self.X_data[shuffled_ids[split[1]:]]
+            x_train = self.X_data[shuffled_idx[:split[0]]]
+            x_test = self.X_data[shuffled_idx[split[0]:split[1]]]
+#            x_valid = self.X_data[shuffled_idx[split[1]:]]
     
             # Train autoencoder
             self.autoencoder.fit(x_train, x_train,
@@ -360,11 +372,11 @@ class SimilarityMeasures():
             See scipy spatial.distance.cdist for options. Default is 'cosine'.
         
         """
-        Cdistances_ids, Cdistances = functions.calculate_distances(self.vectors_centroid, 
+        Cdistances_idx, Cdistances = functions.calculate_distances(self.vectors_centroid, 
                                                                    num_hits, method = method)
         
-        self.Cdistances_ids = Cdistances_ids
-        self.Cdistances = Cdistances
+        self.Cdistances_ctr_idx = Cdistances_idx
+        self.Cdistances_ctr = Cdistances
 
 
     def get_autoencoder_distances(self, num_hits=25, method='cosine'):
@@ -380,10 +392,10 @@ class SimilarityMeasures():
         """
         self.vectors_ae = self.encoder.predict(self.X_data)
         
-        Cdistances_ae_ids, Cdistances_ae = functions.calculate_distances(self.vectors_ae, 
+        Cdistances_ae_idx, Cdistances_ae = functions.calculate_distances(self.vectors_ae, 
                                                                    num_hits, method = method)
         
-        self.Cdistances_ae_ids = Cdistances_ae_ids
+        self.Cdistances_ae_idx = Cdistances_ae_idx
         self.Cdistances_ae = Cdistances_ae
 
 
@@ -398,29 +410,79 @@ class SimilarityMeasures():
             See scipy spatial.distance.cdist for options. Default is 'cosine'.
         
         """
-        Cdistances_ids, Cdistances = functions.calculate_distances(self.vectors_pca, 
+        Cdistances_idx, Cdistances = functions.calculate_distances(self.vectors_pca, 
                                                                    num_hits, method = method)
         
-        self.Cdistances_pca_ids = Cdistances_ids
+        self.Cdistances_pca_idx = Cdistances_idx
         self.Cdistances_pca = Cdistances
         
         
-    def get_lda_distances(self, num_hits=25, method='cosine'):
-        """ Calculate PCA distances(all-versus-all --> matrix)
+    def get_lda_distances(self, num_hits=25):
+        """ Calculate LDA topic based distances (all-versus-all)
         
         Args:
         -------
         num_centroid_hits: int
             Function will store the num_centroid_hits closest matches. Default is 25.      
-        method: str
-            See scipy spatial.distance.cdist for options. Default is 'cosine'.
         
         """
-        Cdistances_ids, Cdistances = functions.calculate_distances(self.vectors_pca, 
-                                                                   num_hits, method = method)
         
-        self.Cdistances_pca_ids = Cdistances_ids
-        self.Cdistances_pca = Cdistances
+        from gensim.test.utils import get_tmpfile
+
+        # Now using faster gensim way (also not requiering to load everything into memory at once)
+        index_tmpfile = get_tmpfile("index")
+        index = gensim.similarities.Similarity(index_tmpfile, self.model_lda[self.bow_corpus], 
+                                               num_features=len(self.dictionary))  # build the index
+        Cdist = np.zeros((len(self.corpus), len(self.corpus)))
+        for i, similarities in enumerate(index):  # yield similarities of all indexed documents
+            Cdist[:,i] = similarities
+            
+        Cdist = 1 - Cdist  # switch from similarity to distance
+
+        # Create numpy arrays to store distances
+        Cdistances_idx = np.zeros((Cdist.shape[0],num_hits), dtype=int)
+        Cdistances = np.zeros((Cdist.shape[0],num_hits))
+        
+        for i in range(Cdist.shape[0]):
+            Cdistances_idx[i,:] = Cdist[i,:].argsort()[:num_hits]
+            Cdistances[i,:] = Cdist[i, Cdistances_idx[i,:]]
+
+        self.Cdistances_lda_idx = Cdistances_idx
+        self.Cdistances_lda = Cdistances
+        
+        
+    def get_lsi_distances(self, num_hits=25):
+        """ Calculate LSI based distances (all-versus-all)
+        
+        Args:
+        -------
+        num_centroid_hits: int
+            Function will store the num_centroid_hits closest matches. Default is 25.      
+        
+        """
+        
+        from gensim.test.utils import get_tmpfile
+
+        # Now using faster gensim way (also not requiering to load everything into memory at once)
+        index_tmpfile = get_tmpfile("index")
+        index = gensim.similarities.Similarity(index_tmpfile, self.model_lda[self.bow_corpus], 
+                                               num_features=len(self.dictionary))  # build the index
+        Cdist = np.zeros((len(self.corpus), len(self.corpus)))
+        for i, similarities in enumerate(index):  # yield similarities of all indexed documents
+            Cdist[:,i] = similarities
+            
+        Cdist = 1 - Cdist  # switch from similarity to distance
+
+        # Create numpy arrays to store distances
+        Cdistances_idx = np.zeros((Cdist.shape[0],num_hits), dtype=int)
+        Cdistances = np.zeros((Cdist.shape[0],num_hits))
+        
+        for i in range(Cdist.shape[0]):
+            Cdistances_idx[i,:] = Cdist[i,:].argsort()[:num_hits]
+            Cdistances[i,:] = Cdist[i, Cdistances_idx[i,:]]
+
+        self.Cdistances_lsi_idx = Cdistances_idx
+        self.Cdistances_lsi = Cdistances
 
 
     def similarity_search(self, num_centroid_hits=100, centroid_min=0.3, 
@@ -480,10 +542,10 @@ class SimilarityMeasures():
             else: 
                 updated_hits = num_centroid_hits
             
-            candidate_ids = centroid_distances[:updated_hits, 0].astype(int) 
+            candidate_idx = centroid_distances[:updated_hits, 0].astype(int) 
             
             distances = np.zeros((updated_hits, 6))
-            distances[:,0] = np.array(candidate_ids) 
+            distances[:,0] = np.array(candidate_idx) 
             distances[:,1] = centroid_distances[:updated_hits, 1]  #Centroid distances 
             
             # Calulate distances based on LDA topics...
@@ -491,21 +553,21 @@ class SimilarityMeasures():
             vec_lda = self.model_lda[vec_bow]
             list_similars = self.index_lda[vec_lda]
             list_similars = sorted(enumerate(list_similars), key=lambda item: -item[1])
-            distances[:,2] = np.array([x[1] for x in list_similars])[candidate_ids]
+            distances[:,2] = np.array([x[1] for x in list_similars])[candidate_idx]
             
             # Calulate distances based on LSI...
             vec_lsi = self.model_lsi[vec_bow]
             list_similars_lsi = self.index_lsi[vec_lsi]
             list_similars_lsi = sorted(enumerate(list_similars_lsi), key=lambda item: -item[1])
-            distances[:,3] = np.array([x[1] for x in list_similars_lsi])[candidate_ids]
+            distances[:,3] = np.array([x[1] for x in list_similars_lsi])[candidate_idx]
 
   
             if WMD_refiner:
-                for k, m in enumerate(candidate_ids):
+                for k, m in enumerate(candidate_idx):
                     distances[k,4] = self.model_word2vec.wv.wmdistance(self.corpus[i], self.corpus[m])
 
             if doc2vec_refiner:
-                for k, m in enumerate(candidate_ids):
+                for k, m in enumerate(candidate_idx):
                     distances[k,5] = self.model_doc2vec.docvecs.similarity(i, m)
 
             distances[distances[:,1] > 1E10,2] = 1000 # remove infinity values

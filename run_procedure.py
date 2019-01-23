@@ -29,6 +29,9 @@ import os
 import glob
 
 
+import helper_functions as functions
+import MS_functions
+
 #%%
 # load, initialize data
 nplinker_setup(LDA_PATH=PATH_MS2LDA)
@@ -58,62 +61,23 @@ print("// check issue with losses! So far in metabolomics.py losses were between
 print("// ")
 print("// Now its between MS1 peak (precursor) and MS2 peaks (better?)")
 print(20 * "--")
-import numpy as np
 
-def get_losses(spectrum):
-    MS1_peak = spectrum.precursor_mz
-    peaks = spectrum.peaks
-    losses = []
-    for i, peak in enumerate(peaks):
-        losses.append((MS1_peak - peak[0], i))
-    return losses
-
-def create_MS_documents(spectra, num_digits):
-    MS_documents = []
-    MS_documents_intensity = []
-    
-    for i, spectrum in enumerate(spectra):
-        doc = []
-        doc_intensity = []
-#        losses = spectrum.losses
-        losses = get_losses(spectrum)
-        peaks = spectrum.peaks
-
-        if (i+1) % 100 == 0 or i == len(spectra)-1:  # show progress
-                print('\r', ' Created documents for ', i+1, ' of ', len(spectra), ' spectra.', end="")
-                
-        for peak in peaks:
-            doc.append("peak_" + "{:.{}f}".format(peak[0], num_digits))
-            doc_intensity.append(int(peak[1]))
-        
-        for loss in losses:
-            doc.append("loss_"  + "{:.{}f}".format(loss[0], num_digits))
-            
-#            # loss intensity ???? for now just take mean!?
-#            loss_intensity = (peaks[loss[1]][1] + peaks[loss[2]][1])/2
-            loss_intensity = peaks[loss[1]][1]
-            doc_intensity.append(int(loss_intensity))
-            
-        MS_documents.append(doc)
-        MS_documents_intensity.append(doc_intensity)
-         
-    return MS_documents, MS_documents_intensity
 
 # quite a large tollerance!!!
-MS_documents, MS_documents_intensity = create_MS_documents(spectra, 2)
+MS_documents, MS_documents_intensity = MS_functions.create_MS_documents(spectra, 2)
 
-#%% get feeling for peak range and error:
-peaks_total = []
-for i, spectrum in enumerate(spectra):
-    for peak in spectrum.peaks:
-        peaks_total.append(peak[0])
-
-peaks_total = np.array(peaks_total)
-
-
-#%%
-from matplotlib import pyplot as plt
-plt.hist(peaks_total)
+##%% get feeling for peak range and error:
+#peaks_total = []
+#for i, spectrum in enumerate(spectra):
+#    for peak in spectrum.peaks:
+#        peaks_total.append(peak[0])
+#
+#peaks_total = np.array(peaks_total)
+#
+#
+##%%
+#from matplotlib import pyplot as plt
+#plt.hist(peaks_total)
 
 
 #%% cleaned up attempt ---------------------------------------------------------------
@@ -138,7 +102,6 @@ Sim_measure.get_vectors_centroid(weighted=True)
 
 
 #%%
-import helper_functions as functions
 Sim_measure.get_centroid_distances(num_hits=25, method='cosine')
 
 
@@ -188,15 +151,50 @@ MSnet = functions.create_distance_network(Sim_measure.Cdistances_pca_ids,
 
 
 
-#%% LDA
+#%% LDA -----------------------------------------------------------------------
 file_model_lda = "data\\model_lda_MS_test01.model"
 Sim_measure.build_model_lda(file_model_lda, num_of_topics=100, num_pass=4, 
                         num_iter=100, use_stored_model=True)
 
-#%% LSI
+
+
+#%% 
+Sim_measure.get_lda_distances(num_hits=25)
+
+#%%
+from matplotlib import pyplot as plt
+plt.hist(Sim_measure.Cdistances_lda.reshape(len(Cdist)*25), 50)
+
+
+
+#%%
+MSnet = functions.create_distance_network(Sim_measure.Cdistances_lda_idx, 
+                                Sim_measure.Cdistances_lda, 
+                                filename="output\\MS_lda_test.graphml",                             
+                                cutoff_dist = 0.15,
+                                max_connections = 10,
+                                min_connections = 1)
+
+#%% LSI -----------------------------------------------------------------------
 file_model_lsi = "data\\model_lsi_MS_test01.model"
 Sim_measure.build_model_lsi(file_model_lsi, num_of_topics=100, 
                              use_stored_model=True)
+
+
+#%% 
+Sim_measure.get_lsi_distances(num_hits=25)
+
+
+
+#%%
+MSnet = functions.create_distance_network(Sim_measure.Cdistances_lsi_idx, 
+                                Sim_measure.Cdistances_lsi, 
+                                filename="output\\MS_lsi_test.graphml",                             
+                                cutoff_dist = 0.1,
+                                max_connections = 10,
+                                min_connections = 1)
+
+
 #%% Doc2Vec
 file_model_doc2vec = "data\\model_doc2vec_MS_test01.model"
 Sim_measure.build_model_doc2vec(file_model_doc2vec, vector_size=100, window=50, 
