@@ -7,6 +7,7 @@ from pprint import pprint
 import gensim 
 from gensim import corpora
 from gensim import models
+from gensim.test.utils import get_tmpfile
 
 from scipy import spatial
 
@@ -67,6 +68,8 @@ class SimilarityMeasures():
         self.Cdistances_lda_idx = None
         self.Cdistances_lsi = None
         self.Cdistances_lsi_idx = None
+        self.Cdistances_d2v = None
+        self.Cdistances_d2v_idx = None
 
 
     def preprocess_documents(self, max_fraction, create_stopwords = False):
@@ -120,7 +123,7 @@ class SimilarityMeasures():
         """ Build Word2Vec model (using gensim)
         TODO: show progress along epochs/iter
         """
-        
+
         # Check if model already exists and should be loaded
         if os.path.isfile(file_model_word2vec) and use_stored_model:   
             print("Load stored word2vec model ...")
@@ -426,8 +429,6 @@ class SimilarityMeasures():
             Function will store the num_centroid_hits closest matches. Default is 25.      
         
         """
-        
-        from gensim.test.utils import get_tmpfile
 
         # Now using faster gensim way (also not requiering to load everything into memory at once)
         index_tmpfile = get_tmpfile("index")
@@ -460,8 +461,6 @@ class SimilarityMeasures():
             Function will store the num_centroid_hits closest matches. Default is 25.      
         
         """
-        
-        from gensim.test.utils import get_tmpfile
 
         # Now using faster gensim way (also not requiering to load everything into memory at once)
         index_tmpfile = get_tmpfile("index")
@@ -483,6 +482,33 @@ class SimilarityMeasures():
 
         self.Cdistances_lsi_idx = Cdistances_idx
         self.Cdistances_lsi = Cdistances
+
+
+    def get_doc2vec_distances(self, num_hits=25, method='cosine'):
+        """ Calculate Doc2Vec based distances (all-vs-all)
+        
+        Args:
+        -------
+        num_centroid_hits: int
+            Function will store the num_centroid_hits closest matches. Default is 25.      
+        method: str
+            See scipy spatial.distance.cdist for options. Default is 'cosine'.
+        """
+        
+        if self.model_doc2vec is None:
+            print("No trained Doc2Vec model found.")
+            print("Please first train model using 'build_model_doc2vec' function.")
+        else:
+            vectors = np.zeros((len(self.corpus), self.model_doc2vec.vector_size))
+            
+            for i in range(len(self.corpus)):
+                vectors[i,:] = self.model_doc2vec.docvecs[i]
+    
+            Cdistances_idx, Cdistances = functions.calculate_distances(vectors, 
+                                                                       num_hits, method = method)
+            
+            self.Cdistances_d2v_idx = Cdistances_idx
+            self.Cdistances_d2v = Cdistances
 
 
     def similarity_search(self, num_centroid_hits=100, centroid_min=0.3, 

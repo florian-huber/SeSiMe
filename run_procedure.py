@@ -92,9 +92,9 @@ Sim_measure.preprocess_documents(0.2, create_stopwords = False)
 
 
 #%%
-file_model_word2vec = 'data\\MS_model_word2vec_MS1MS2_losses.model' 
+file_model_word2vec = 'data\\MS_model_word2vec_ref.model' 
 Sim_measure.build_model_word2vec(file_model_word2vec, size=100, window=50, 
-                             min_count=1, workers=4, iter=250, 
+                             min_count=1, workers=4, iter=25, 
                              use_stored_model=True)
 
 #%%
@@ -130,13 +130,6 @@ MSnet = functions.create_distance_network(Sim_measure.Cdistances_ids,
                                 max_connections = 10,
                                 min_connections = 1)
 
-
-
-#%% PCA
-from sklearn.decomposition import PCA
-pca = PCA(n_components=100)
-
-Sim_measure.vectors_pca = pca.fit_transform(Sim_measure.X_data)
 
 #%%
 Sim_measure.get_pca_distances(num_hits=25, method='cosine')
@@ -200,6 +193,17 @@ file_model_doc2vec = "data\\model_doc2vec_MS_test01.model"
 Sim_measure.build_model_doc2vec(file_model_doc2vec, vector_size=100, window=50, 
                              min_count=1, workers=4, epochs=250, 
                              use_stored_model=True)
+
+
+#%%
+Sim_measure.get_doc2vec_distances(num_hits=25, method='cosine')
+
+
+
+
+
+
+
 
 #%%
 candidates = Sim_measure.similarity_search(num_centroid_hits=100, centroid_min=0.3, 
