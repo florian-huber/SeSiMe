@@ -56,7 +56,7 @@ class Spectrum(object):
                  merge_ppm = 10,
                  replace = 'max'):
 
-        self.id = id
+        self.id = []
         self.filename = []
         self.peaks = []
         self.precursor_mz = []
@@ -271,7 +271,7 @@ def load_MS_data(path_data, path_json,
             
             with open(path_json + results_file[:-4] + "txt", "r") as f:
                 for line in f:
-                    line = line.replace('"', '').replace("'", "").replace("[", "").replace("]", "")
+                    line = line.replace('"', '').replace("'", "").replace("[", "").replace("]", "").replace("\n", "")
                     MS_documents.append(line.split(", "))
                     
             with open(path_json + results_file[:-5] + "_intensity.txt", "r") as f:
@@ -388,15 +388,58 @@ from rdkit import Chem
 from rdkit.Chem import Draw
 
 
-def plot_smiles(query_id, spectra, candidate_idx, candidate_dist, max_plot_dimension = 10,
-                   sharex=True, labels=False, dist_method = "centroid"):
+def plot_smiles(query_id, spectra_dict, MS_measure, num_candidates = 10,
+                   sharex=True, labels=False, dist_method = "centroid",
+                   plot_type = "single"):
     """ Plot molecules for closest candidates
     
     """
-    size = (200, 200)  # Smaller figures than the default
-    idx = candidate_idx[query_id,:max_plot_dimension]
+    
+    # Select chosen distance methods
+    if dist_method == "centroid":
+        candidates_idx = MS_measure.Cdistances_ctr_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.Cdistances_ctr[query_id, :num_candidates]
+    elif dist_method == "pca":
+        candidates_idx = MS_measure.Cdistances_pca_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.Cdistances_pca[query_id, :num_candidates]
+    elif dist_method == "autoencoder":
+        candidates_idx = MS_measure.Cdistances_ae_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.Cdistances_ae[query_id, :num_candidates]
+    elif dist_method == "lda":
+        candidates_idx = MS_measure.Cdistances_lda_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.Cdistances_lda[query_id, :num_candidates]
+    elif dist_method == "lsi":
+        candidates_idx = MS_measure.Cdistances_lsi_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.Cdistances_lsi[query_id, :num_candidates]
+    elif dist_method == "doc2vec":
+        candidates_idx = MS_measure.Cdistances_d2v_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.Cdistances_d2v[query_id, :num_candidates]
+    else:
+        print("Chosen distance measuring method not found.")
 
-    for id in idx:
-        m = Chem.MolFromSmiles(spectra[id].smiles)
-        Draw.MolToMPL(m, size=size)
+    
+    
+    size = (200, 200)  # Smaller figures than the default
+#    idx = candidates_idx[query_id,:num_candidates]
+
+    keys = []
+    for key, value in spectra_dict.items():
+        keys.append(key)  
+        
+    smiles = []  
+    molecules = []
+    for i, candidate_id in enumerate(candidates_idx):
+        key = keys[candidate_id]
+        smiles.append(spectra_dict[key]["smiles"])
+        mol = Chem.MolFromSmiles(smiles[i])
+        mol.SetProp('_Name', smiles[i])
+        if plot_type == 'single':
+            Draw.MolToMPL(mol, size=size)
+    
+    if plot_type != "single":    # this will only work if there's no conflict with rdkit and pillow...       
+        Chem.Draw.MolsToGridImage(molecules,legends=[mol.GetProp('_Name') for mol in molecules])
+
+#    for id in idx:
+#        m = Chem.MolFromSmiles(spectra[id].smiles)
+#        Draw.MolToMPL(m, size=size)
 

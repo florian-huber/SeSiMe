@@ -214,7 +214,8 @@ class SimilarityMeasures():
             self.model_lsi.save(file_model_lsi)
 
 
-    def build_autoencoder(self, file_model_ae, file_model_encoder, epochs = 100, batch_size = 1024, encoding_dim = 100):
+    def build_autoencoder(self, file_model_ae, file_model_encoder, epochs = 100, batch_size = 1024, encoding_dim = 100,
+                          layer_factors = (8,4,2)):
         """ Build and train a deep autoencoder model to reduce dimensionatliy of 
         corpus data.
         
@@ -228,7 +229,8 @@ class SimilarityMeasures():
             Batch size for model training.
         encoding_dim: int
             Number of dimensions of the reduced representation.  
-        
+        layer_factors: (int, int, int)
+            Layer dimensions of dense networks (factor with respect to encoding_dim).
         """
         # Check if model already exists and should be loaded
         if os.path.isfile(file_model_ae):   
@@ -249,9 +251,7 @@ class SimilarityMeasures():
             print("Creating new autoencoder model...")
             
             input_dim = len(self.dictionary)
-            layer1_factor = 8
-            layer2_factor = 4
-            layer3_factor = 2
+            layer1_factor, layer2_factor, layer3_factor = layer_factors
             
             corpus_dim = len(self.corpus)
             
@@ -283,6 +283,7 @@ class SimilarityMeasures():
             
             self.autoencoder.compile(optimizer='adam', loss='binary_crossentropy')
     
+            # See if there is one-hot encoded vectors (X_data)
             if self.X_data is None:
                 # Transform data to be used as input for Keras model
                 self.X_data = np.zeros((corpus_dim, input_dim))
@@ -358,6 +359,20 @@ class SimilarityMeasures():
         """ Calculate PCA vectors for all documents
         """
         pca = PCA(n_components=dimension)
+        
+        input_dim = len(self.dictionary)
+        corpus_dim = len(self.corpus)
+        
+        # See if there is one-hot encoded vectors (X_data)
+        if self.X_data is None:
+            # Transform data to be used as input for Keras model
+            self.X_data = np.zeros((corpus_dim, input_dim))
+            
+            for i, bow_doc in enumerate(self.bow_corpus[:corpus_dim]):
+                word_vector_bow = np.array([x[0] for x in bow_doc]).astype(int)
+                word_vector_count = np.array([x[1] for x in bow_doc]).astype(int)
+                self.X_data[i,:] = functions.full_wv(input_dim, word_vector_bow, word_vector_count)
+
         self.vectors_pca = pca.fit_transform(self.X_data)
         
 

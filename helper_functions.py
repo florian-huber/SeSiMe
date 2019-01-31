@@ -104,18 +104,6 @@ def full_wv(vocab_size, word_idx, word_count):
 
 
 
-def get_spaced_colors(n):
-    """ Create set of 'n' well-distinguishable colors
-    """
-    max_value = 16581375 #255**3
-    interval = int(max_value / n)
-    colors = [hex(I)[2:].zfill(6) for I in range(0, max_value, interval)]
-    RGB_colors = [(int(i[:2], 16)/255, int(i[2:4], 16)/255, int(i[4:], 16)/255) for i in colors]    
-
-    return RGB_colors
-
-
-
 ##
 ## ---------------- Clustering & metrics functions ----------------------------
 ## 
@@ -184,71 +172,6 @@ def calculate_distances(vectors, num_hits=25, method='cosine'):
     return Cdistances_ids, Cdistances
 
 
-##
-## ---------------------------- Plotting functions ----------------------------
-## 
-
-import matplotlib.pyplot as plt
-from dna_features_viewer import GraphicFeature, GraphicRecord
-
-
-def plot_bgc_genes(BGC_genes, candidate_ids, candidate_dist, 
-                   sharex=True, labels=False, dist_method = "centroid"):
-    # plot bgc genes for visual comparison
-    # 
-    max_plot_dimension = 10
-    
-    num_plots = len(BGC_genes)
-    if num_plots > max_plot_dimension:
-        print("This might be too many BGCs to compare...")
-
-    # collect all notes and types of the bgcs
-    found_types = []
-    notes_found = []
-    for genes in BGC_genes: 
-        for feature in genes:
-            found_types.append(feature[3])
-            if feature[2] != []:
-                note = feature[2].replace(":", " ").split()
-                note = [note[1], note[2]]  
-                notes_found.append(note)    
-    notes_unique = list(set(list(zip(*notes_found))[0]))
-    selected_colors = get_spaced_colors(len(notes_unique)+1)                
-                
-#    fig = plt.figure(figsize=(8, 3.*num_plots))
-    fig, ax0 = plt.subplots(len(BGC_genes), 1, figsize=(8, 3.*num_plots) , sharex=sharex) 
-    fig.suptitle("Gene feature comparison (similarity measure: " + dist_method + ")")
-    max_xlim = max([x[-1][1][1] for x in BGC_genes])
-    
-    for i, genes in enumerate(BGC_genes):
-        record = []
-        features = []
-        for feature in genes:
-            if feature[2] != []:
-                color = selected_colors[notes_unique.index(feature[2].replace(":", " ").split()[1])]
-            else:
-                color = "black"
-            
-            if labels:
-                label = feature[0]
-            else:
-                label = None
-            features.append(GraphicFeature(start=feature[1][0], 
-                                           end=feature[1][1], 
-                                           strand=feature[1][2], 
-                                           color=color , label=label,
-                                           thickness=9, linewidth=0.5, fontdict={"size": 9}))
-      
-        record = GraphicRecord(sequence_length=features[-1].end, features=features)
-
-
-        record.plot(ax=ax0[i], with_ruler=True)
-#        ax0[i].set_title("BGC no. " + str(int(candidates["id"][i])) )
-        info1 = "BGC no. %d     " %candidate_ids[i]
-        info2 = dist_method + " distance = %.3f" %candidate_dist[i]
-        ax0[i].text(0.02,0.75, info1 + info2, size=10, ha="left", transform=ax0[i].transAxes)
-        if sharex:
-            ax0[i].set_xlim([ax0[i].get_xlim()[0], max_xlim])
 
 
 

@@ -9,11 +9,7 @@ import re
 import os, fnmatch
 import csv
 from difflib import get_close_matches 
-import gensim 
-from gensim import corpora
-from gensim.corpora.dictionary import Dictionary
 import numpy as np
-from pprint import pprint  # pretty-printer
     
 import helper_functions as functions
 
@@ -25,173 +21,166 @@ class BGC(object):
     """
        
     def __init__(self):
-        pass
-        
+        self.id = []
+
     
-    def get_BGC_data(self, path_bgc_data, path_json, results_file = "BGC_collected_data.json", filefilter="*cluster001.gbk", entry = "single"):        
-        """ Collect available strains in BGC folder 
-        (bit cumbersome...)
+    def read_BGC_data(self, bgc_record, bgc_filename_updated, id):        
+        """ Read .gbk file and extract most relevant information
+        
         """
         
-        dirs = os.listdir(path_bgc_data)
-        strains = fnmatch.filter(dirs, filefilter)
+        bgc_sequence = bgc_record.seq._data
+            
+        # Collect relevant data (or what we believe might become relevant)
+        PFAM_domain_data = []   
+        PFAM_domains = []     
+        feature_types =[] 
+        bgc_knownclusters = [] 
+        genes = []
+         
+        # Go through all features and look for the most relevant ones
+        for i, feature in enumerate(bgc_record.features):
+            feature_types.append(feature.type)
+            
+            if "product" in bgc_record.features[i].qualifiers: 
+                bgc_info = {}
+                bgc_info["BGC type"] = bgc_record.features[i].qualifiers["product"][0]
+                if "probability" in bgc_record.features[i].qualifiers: 
+                    bgc_info["BGC type probability"] = bgc_record.features[i].qualifiers["probability"][0]
+                else:
+                    bgc_info["BGC type probability"] = 0
+                
+            if "knownclusterblast" in bgc_record.features[i].qualifiers:    
+                for m in range(0,len(bgc_record.features[i].qualifiers["knownclusterblast"])):
+                        
+                    teststring = bgc_record.features[i].qualifiers["knownclusterblast"][m]
+                    bgc_knownclusters.append([teststring.split("\t")[0][teststring.find("B"):],
+                    [float(s) for s in re.findall(r'-?\d+\.?\d*', teststring.split("\t")[1])][-1]
+                    ])
+                       
+            # collect key genes (= CDS only?):
+            if feature.type == "CDS":
+                location = bgc_record.features[i].location
+                features = []
+                features.append(bgc_record.features[i].qualifiers["locus_tag"][0])
+                features.append([location.nofuzzy_start, location.nofuzzy_end, location._strand],)
+                if "note" in bgc_record.features[i].qualifiers: 
+                    features.append(bgc_record.features[i].qualifiers["note"][0])
+                else:
+                    features.append([])
+                if "sec_met" in bgc_record.features[i].qualifiers:
+                    features.append(bgc_record.features[i].qualifiers["sec_met"][0])
+                else:
+                    features.append([])
+#                         bgc_record.features[i].qualifiers["translation"][0]
+                    
+                genes.append(features)
+    
+            # collect PFAM domains (and antiSMASH scores):
+            if feature.type == "PFAM_domain":
+#                    if "db_xref" in feature.qualifiers:
+                PFAM_domains.append(feature.qualifiers['db_xref'][0][6:])
+                PFAM_domain_data.append([feature.qualifiers['db_xref'][0][6:],
+                                       feature.qualifiers["evalue"][0],
+                                       feature.qualifiers["score"][0],
+                                       float(feature.qualifiers["note"][1][27:])])
         
-        if results_file is not None:
-            try: 
-                self.BGC_data_dict = functions.json_to_dict(path_json + results_file)
-                print("BGC json file found and loaded.")
-                collect_new_data = False
-                
-                with open(path_json + results_file[:-4] + "txt", "r") as f:
-                    for line in f:
-                        line = line.replace('"', '').replace("'", "").replace("[", "").replace("]", "")
-                        self.BGC_documents.append(line.split(", "))
-                    
-            except FileNotFoundError: 
-                print("Could not find file ", path_json,  results_file) 
-                collect_new_data = True
-            
-            
-                
-        # (Maybe) collect data from gbk files:
-        if self.BGC_data_dict == {} or results_file is None: 
-            collect_new_data = True
-            # run over all strains:
-            strainnumber = 0
-            for bgc_filename in strains:
-                bgc_filename_pattern = bgc_filename[0:-7] + "*"
-                strainnumber += 1
-            
-                #BGC_data = GBK_BGC_importer.get_BGC_data(datafolder, "2517287019_c00001_Salpac3...cluster*", "_2.")
-                print("collecting data from ...", bgc_filename_pattern)
-                BGC_data_dict_strain, BGC_documents_strain, BGC_sequences = BGC_functions.import_BGC_data(path_bgc_data, 
-                                                                                           bgc_filename_pattern, "_2.", entry = entry)
-                    
-                # Make collection of BGC data (includes PFAMS, genes etc.)
-                self.BGC_data_dict = {**self.BGC_data_dict, **BGC_data_dict_strain} #BGC_data = BGC_data + BGC_data_strain
-                # Make collection of documents (= clusters written in PFAM domains)
-                self.BGC_documents = self.BGC_documents + BGC_documents_strain   
-                # Make collection of DNA sequences
-                self.BGC_sequences = self.BGC_sequences + BGC_sequences
-                
-                
-#                for i in range(0, len(self.BGC_data_dict)):
-#                    bgcs_found.append(f"bgc_{strainnumber}_{i}")
-#                    bgc_types.append(BGC_data[i][0])
-                                        
-        # Save collected data
-        if collect_new_data == True:
-            
-            functions.dict_to_json(self.BGC_data_dict, path_json + results_file)     
-            # store documents (PFAM domains per BGC)
-            with open(path_json + results_file[:-4] + "txt", "w") as f:
-                for s in self.BGC_documents:
-                    f.write(str(s) +"\n")
+        self.id = id
+        self.bgc_type = (bgc_info["BGC type"], bgc_info["BGC type probability"])
+        self.pfam_domains = PFAM_domains
+        self.pfam_domain_data = PFAM_domain_data
+        self.genes = genes
+        self.sequences = bgc_sequence
+        self.bgc_knownclusters = bgc_knownclusters
+        
 
 
 
-
-
-
-
-def load_BGC_data(datafolder, filename_include, filename_exclude, entry = "single"):
+def load_BGC_data(path_bgc_data, 
+                  filename_include, 
+                  filename_exclude, 
+                  path_json, 
+                  results_file = "BGC_collected_data.json", 
+                  filefilter="*cluster001.gbk",
+                  entry = "single"):
     """ Extract values from antiSMAH .gbk files of byosynthetic gene clusters
     
     """
     
-    pattern = filename_include
-    dirs = os.listdir(datafolder)
-    
-#    BGC_data = []
-    BGC_data_dict = {}
+    BGCs = []
+    BGCs_dict = {}
     BGC_documents = []
-    BGC_sequences = []
-    feature_types = []
-    
-    
-    # go through all the clusters in one strain:
-    for bgc_filename in [x for x in fnmatch.filter(dirs, pattern) if filename_exclude not in x ] :
 
-        bgc_file = datafolder + bgc_filename
-        
-        if entry == "multiple":
-            bgc_records = list(SeqIO.parse(bgc_file, "genbank"))
-        else:    
-#            bgc_records = SeqIO.read(bgc_file, "genbank")
-            bgc_records = list(SeqIO.parse(bgc_file, "genbank"))
-        
-        for num_rec, bgc_record in enumerate(bgc_records):
-            if entry == "multiple":
-                bgc_filename_updated = bgc_filename + str(num_rec)
-            else:    
-                bgc_filename_updated = bgc_filename 
+    dirs = os.listdir(path_bgc_data)
+    dirs_filtered = [x for x in fnmatch.filter(dirs, filename_include) if filename_exclude not in x]
+    strains = fnmatch.filter(dirs_filtered, filefilter)
+    
+    if results_file is not None:
+        try: 
+            BGCs_dict = functions.json_to_dict(path_json + results_file)
+            print("BGC json file found and loaded.")
+            collect_new_data = False
             
-            bgc_sequence = bgc_record.seq._data
-            
-            # collect relevant data (or what we believe might become relevant)
-            PFAM_domain_data = []   
-            PFAM_domains = []     
-            feature_types =[] 
-            bgc_knownclusters = [] 
-            genes = []
-             
-            # go through all features and look for the most relevant ones
-            for i, feature in enumerate(bgc_record.features):
-                feature_types.append(feature.type)
+            with open(path_json + results_file[:-4] + "txt", "r") as f:
+                for line in f:
+                    line = line.replace('"', '').replace("'", "").replace("[", "").replace("]", "").replace("\n", "")
+                    BGC_documents.append(line.split(", "))
                 
-                if "product" in bgc_record.features[i].qualifiers: 
-                    bgc_info = {}
-                    bgc_info["BGC type"] = bgc_record.features[i].qualifiers["product"][0]
-                    if "probability" in bgc_record.features[i].qualifiers: 
-                        bgc_info["BGC type probability"] = bgc_record.features[i].qualifiers["probability"][0]
-                    else:
-                        bgc_info["BGC type probability"] = 0
-                    
-                if "knownclusterblast" in bgc_record.features[i].qualifiers:    
-                    for m in range(0,len(bgc_record.features[i].qualifiers["knownclusterblast"])):
-                            
-                        teststring = bgc_record.features[i].qualifiers["knownclusterblast"][m]
-                        bgc_knownclusters.append([teststring.split("\t")[0][teststring.find("B"):],
-                        [float(s) for s in re.findall(r'-?\d+\.?\d*', teststring.split("\t")[1])][-1]
-                        ])
-                           
-                # collect key genes (= CDS only?):
-                if feature.type == "CDS":
-                    location = bgc_record.features[i].location
-                    features = []
-                    features.append(bgc_record.features[i].qualifiers["locus_tag"][0])
-                    features.append([location.nofuzzy_start, location.nofuzzy_end, location._strand],)
-                    if "note" in bgc_record.features[i].qualifiers: 
-                        features.append(bgc_record.features[i].qualifiers["note"][0])
-                    else:
-                        features.append([])
-                    if "sec_met" in bgc_record.features[i].qualifiers:
-                        features.append(bgc_record.features[i].qualifiers["sec_met"][0])
-                    else:
-                        features.append([])
-    #                         bgc_record.features[i].qualifiers["translation"][0]
-                        
-                    genes.append(features)
+        except FileNotFoundError: 
+            print("Could not find file ", path_json,  results_file) 
+            collect_new_data = True
+
+
+    # Read data from files if no pre-stored data is found:
+    if BGCs_dict == {} or results_file is None: 
+        collect_new_data = True
+        bgc_count = 0
+
+        # Run over all strains:
+        strainnumber = 0
+        for bgc_filename in strains:
+            bgc_filename_pattern = bgc_filename[0:-7] + "*"
+            strainnumber += 1
         
-                # collect PFAM domains (and antiSMASH scores):
-                if feature.type == "PFAM_domain":
-#                    if "db_xref" in feature.qualifiers:
-                    PFAM_domains.append(feature.qualifiers['db_xref'][0][6:])
-                    PFAM_domain_data.append([feature.qualifiers['db_xref'][0][6:],
-                                           feature.qualifiers["evalue"][0],
-                                           feature.qualifiers["score"][0],
-                                           float(feature.qualifiers["note"][1][27:])])
-                      
-            BGC_data_dict[bgc_filename_updated] = {"BGC type" : bgc_info["BGC type"],
-                         "BGC type probability" : bgc_info["BGC type probability"],
-                         "similar known BGCs": bgc_knownclusters,
-                         "PFAM domains" : PFAM_domain_data,
-                         "BGC genes" : genes}
-            BGC_documents.append(PFAM_domains)
-            BGC_sequences.append(bgc_sequence)
-    return BGC_data_dict, BGC_documents, BGC_sequences 
-
-
+            print("collecting data from ...", bgc_filename_pattern)
+            
+            # Go through all clusters in one strain:
+            for bgc_filename in [x for x in fnmatch.filter(dirs, bgc_filename_pattern) if filename_exclude not in x]:     
+                bgc_file = path_bgc_data + bgc_filename
+                
+                if entry == "multiple":
+                    bgc_records = list(SeqIO.parse(bgc_file, "genbank"))
+                else:    
+        #            bgc_records = SeqIO.read(bgc_file, "genbank")
+                    bgc_records = list(SeqIO.parse(bgc_file, "genbank"))
+                
+                for num_rec, bgc_record in enumerate(bgc_records):
+                    if entry == "multiple":
+                        bgc_filename_updated = bgc_filename + str(num_rec)
+                    else:    
+                        bgc_filename_updated = bgc_filename 
+                    
+                    bgc = BGC()
+                    bgc.read_BGC_data(bgc_record, bgc_filename_updated, bgc_count)
+                    bgc_count += 1 
+            
+                # Collect in form of list of spectrum objects, and as dictionary
+                BGCs.append(bgc)
+                BGCs_dict[bgc_filename_updated] = bgc.__dict__
+                BGC_documents.append(bgc.pfam_domains)
+                                    
+    # Save collected data
+    if collect_new_data == True:
+        
+        functions.dict_to_json(BGCs_dict, path_json + results_file)     
+        # Store documents (PFAM domains per BGC)
+        with open(path_json + results_file[:-4] + "txt", "w") as f:
+            for s in BGC_documents:
+                f.write(str(s) +"\n")
+    
+    
+    return BGCs, BGCs_dict, BGC_documents
+    
 
 
 
@@ -222,7 +211,9 @@ def BGC_distance_network(Cdistances_ids, Cdistances, filename="Bnet_word2vec_tes
 
 
 def BGC_get_types(BGC_data_dict, filename = 'Bnet_clusterlabels.csv', strain_lookup_list = None):
-    # get BGC names for network nodes (e.g. to use in Cytoscape)    
+    """ Get BGC names for network nodes (e.g. to use in Cytoscape)    
+    
+    """
     
     BGC_names = []
     BGC_names_v2 = []
@@ -302,4 +293,112 @@ def preprocess_document(corpus, stopwords, min_frequency = 2):
     return texts, frequency
 
 
+##
+## ---------------------------- Plotting functions ----------------------------
+## 
+
+import matplotlib.pyplot as plt
+from dna_features_viewer import GraphicFeature, GraphicRecord
+
+
+
+
+def get_spaced_colors(n):
+    """ Create set of 'n' well-distinguishable colors
+    """
+    max_value = 16581375 #255**3
+    interval = int(max_value / n)
+    colors = [hex(I)[2:].zfill(6) for I in range(0, max_value, interval)]
+    RGB_colors = [(int(i[:2], 16)/255, int(i[2:4], 16)/255, int(i[4:], 16)/255) for i in colors]    
+
+    return RGB_colors
+
+
+
+def plot_bgc_genes(query_id, BGCs_dict, BGC_measure, num_candidates = 10, 
+                   sharex=True, labels=False, dist_method = "centroid",
+                   spacing = 1):
+    """ Plot bgc genes for visual comparison
+    
+    """ 
+
+    # Select chosen distance methods
+    if dist_method == "centroid":
+        candidates_idx = BGC_measure.Cdistances_ctr_idx[query_id, :num_candidates]
+        candidates_dist = BGC_measure.Cdistances_ctr[query_id, :num_candidates]
+    elif dist_method == "pca":
+        candidates_idx = BGC_measure.Cdistances_pca_idx[query_id, :num_candidates]
+        candidates_dist = BGC_measure.Cdistances_pca[query_id, :num_candidates]
+    elif dist_method == "autoencoder":
+        candidates_idx = BGC_measure.Cdistances_ae_idx[query_id, :num_candidates]
+        candidates_dist = BGC_measure.Cdistances_ae[query_id, :num_candidates]
+    elif dist_method == "lda":
+        candidates_idx = BGC_measure.Cdistances_lda_idx[query_id, :num_candidates]
+        candidates_dist = BGC_measure.Cdistances_lda[query_id, :num_candidates]
+    elif dist_method == "lsi":
+        candidates_idx = BGC_measure.Cdistances_lsi_idx[query_id, :num_candidates]
+        candidates_dist = BGC_measure.Cdistances_lsi[query_id, :num_candidates]
+    elif dist_method == "doc2vec":
+        candidates_idx = BGC_measure.Cdistances_d2v_idx[query_id, :num_candidates]
+        candidates_dist = BGC_measure.Cdistances_d2v[query_id, :num_candidates]
+    else:
+        print("Chosen distance measuring method not found.")
+
+
+    keys = []
+    for key, value in BGCs_dict.items():
+        keys.append(key)  
+        
+    BGC_genes = []  
+    for i, candidate_id in enumerate(candidates_idx):
+        key = keys[candidate_id]
+        BGC_genes.append(BGCs_dict[key]["genes"])
+
+    # Collect all notes and types of the bgcs
+    found_types = []
+    notes_found = []
+    for genes in BGC_genes: 
+        for feature in genes:
+            found_types.append(feature[3])
+            if feature[2] != []:
+                note = feature[2].replace(":", " ").split()
+                note = [note[1], note[2]]  
+                notes_found.append(note)    
+    notes_unique = list(set(list(zip(*notes_found))[0]))
+    selected_colors = get_spaced_colors(len(notes_unique)+1)                
+                
+#    fig = plt.figure(figsize=(8, 3.*num_plots))
+    fig, ax0 = plt.subplots(len(BGC_genes), 1, figsize=(10, spacing*num_candidates) , sharex=sharex) 
+    fig.suptitle("Gene feature comparison (similarity measure: " + dist_method + ")")
+    max_xlim = max([x[-1][1][1] for x in BGC_genes])
+    
+    for i, genes in enumerate(BGC_genes):
+        record = []
+        features = []
+        for feature in genes:
+            if feature[2] != []:
+                color = selected_colors[notes_unique.index(feature[2].replace(":", " ").split()[1])]
+            else:
+                color = "black"
+            
+            if labels:
+                label = feature[0]
+            else:
+                label = None
+            features.append(GraphicFeature(start=feature[1][0], 
+                                           end=feature[1][1], 
+                                           strand=feature[1][2], 
+                                           color=color , label=label,
+                                           thickness=9, linewidth=0.5, fontdict={"size": 9}))
+      
+        record = GraphicRecord(sequence_length=features[-1].end, features=features)
+
+
+        record.plot(ax=ax0[i], with_ruler=True)
+#        ax0[i].set_title("BGC no. " + str(int(candidates["id"][i])) )
+        info1 = "BGC no. %d     " %candidates_idx[i]
+        info2 = dist_method + " distance = %.3f" %candidates_dist[i]
+        ax0[i].text(0.02,0.75, info1 + info2, size=10, ha="left", transform=ax0[i].transAxes)
+        if sharex:
+            ax0[i].set_xlim([ax0[i].get_xlim()[0], max_xlim])
 
