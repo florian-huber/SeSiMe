@@ -18,8 +18,86 @@ from pprint import pprint  # pretty-printer
 import helper_functions as functions
 
 
-def import_BGC_data(datafolder, filename_include, filename_exclude, entry = "single"):
-    # FUNCTION to extract values from antiSMAH .gbk files of byosynthetic gene clusters
+class BGC(object):
+    """ Class to run word2vec based similarity measure on antiSMASH BGC data.
+    Words are here pfam domains.
+    Documents are the series of pfam domains.
+    """
+       
+    def __init__(self):
+        pass
+        
+    
+    def get_BGC_data(self, path_bgc_data, path_json, results_file = "BGC_collected_data.json", filefilter="*cluster001.gbk", entry = "single"):        
+        """ Collect available strains in BGC folder 
+        (bit cumbersome...)
+        """
+        
+        dirs = os.listdir(path_bgc_data)
+        strains = fnmatch.filter(dirs, filefilter)
+        
+        if results_file is not None:
+            try: 
+                self.BGC_data_dict = functions.json_to_dict(path_json + results_file)
+                print("BGC json file found and loaded.")
+                collect_new_data = False
+                
+                with open(path_json + results_file[:-4] + "txt", "r") as f:
+                    for line in f:
+                        line = line.replace('"', '').replace("'", "").replace("[", "").replace("]", "")
+                        self.BGC_documents.append(line.split(", "))
+                    
+            except FileNotFoundError: 
+                print("Could not find file ", path_json,  results_file) 
+                collect_new_data = True
+            
+            
+                
+        # (Maybe) collect data from gbk files:
+        if self.BGC_data_dict == {} or results_file is None: 
+            collect_new_data = True
+            # run over all strains:
+            strainnumber = 0
+            for bgc_filename in strains:
+                bgc_filename_pattern = bgc_filename[0:-7] + "*"
+                strainnumber += 1
+            
+                #BGC_data = GBK_BGC_importer.get_BGC_data(datafolder, "2517287019_c00001_Salpac3...cluster*", "_2.")
+                print("collecting data from ...", bgc_filename_pattern)
+                BGC_data_dict_strain, BGC_documents_strain, BGC_sequences = BGC_functions.import_BGC_data(path_bgc_data, 
+                                                                                           bgc_filename_pattern, "_2.", entry = entry)
+                    
+                # Make collection of BGC data (includes PFAMS, genes etc.)
+                self.BGC_data_dict = {**self.BGC_data_dict, **BGC_data_dict_strain} #BGC_data = BGC_data + BGC_data_strain
+                # Make collection of documents (= clusters written in PFAM domains)
+                self.BGC_documents = self.BGC_documents + BGC_documents_strain   
+                # Make collection of DNA sequences
+                self.BGC_sequences = self.BGC_sequences + BGC_sequences
+                
+                
+#                for i in range(0, len(self.BGC_data_dict)):
+#                    bgcs_found.append(f"bgc_{strainnumber}_{i}")
+#                    bgc_types.append(BGC_data[i][0])
+                                        
+        # Save collected data
+        if collect_new_data == True:
+            
+            functions.dict_to_json(self.BGC_data_dict, path_json + results_file)     
+            # store documents (PFAM domains per BGC)
+            with open(path_json + results_file[:-4] + "txt", "w") as f:
+                for s in self.BGC_documents:
+                    f.write(str(s) +"\n")
+
+
+
+
+
+
+
+def load_BGC_data(datafolder, filename_include, filename_exclude, entry = "single"):
+    """ Extract values from antiSMAH .gbk files of byosynthetic gene clusters
+    
+    """
     
     pattern = filename_include
     dirs = os.listdir(datafolder)
@@ -114,152 +192,7 @@ def import_BGC_data(datafolder, filename_include, filename_exclude, entry = "sin
     return BGC_data_dict, BGC_documents, BGC_sequences 
 
 
-def BGC_lda_model(BGC_documents, num_of_topics=100, num_pass=1, num_iter=50):
-    
-    # first step: use LDA model for closest hits...
-    BGC_texts, frequency = PFAM_dictionary(BGC_documents)
 
-    #BGC_corpus = Dictionary(BGC_texts)
-    dictionary = corpora.Dictionary(BGC_texts)
-    corpus = [dictionary.doc2bow(text) for text in BGC_texts]
-    
-    lda_model = gensim.models.LdaModel(corpus, id2word=dictionary, 
-                                       num_topics=num_of_topics, passes=num_pass, iterations=num_iter) 
-    
-    #LdaMulticore(corpus=BGC_corpus, num_topics=100)
-    # Output the Keyword in the 10 topics
-    pprint("Keyword in the 10 topics")
-    pprint(lda_model.print_topics())
-
-    return BGC_texts, dictionary, corpus, lda_model
-      
-
-def find_all_nearest_connections(BGC_documents, 
-                          BGC_texts,
-                          dictionary,
-                          corpus,
-                          model_word2vec, 
-                          lda_model,
-                          num_lda_hits=50, 
-                          stopwords = [],
-                          WMD_refiner = False):
-    # Search nearest neighbors in two steps:
-    # 1- Use cosine measure based on LDA model to select candidates
-    # 2- Calculate distances more accurately for the the top candidates using WMD (slow!)
-    
-    if num_lda_hits > len(BGC_documents):
-        num_lda_hits = len(BGC_documents)
-        print('number of best lda hits to keep is bigger than given dimension.')
-    
-    try: lda_model
-    except NameError: lda_model = None
-    if lda_model is None:
-        print("No lda model found. Calculate new one...")
-        BGC_texts, dictionary, corpus, lda_model = BGC_lda_model(BGC_documents, num_pass=5, num_iter=100)
-    else:
-        print("Lda model found")
-    
-    index = gensim.similarities.MatrixSimilarity(lda_model[corpus])
-    
-    # Calulate distances based on LDA topics...
-    dimension = len(BGC_documents)
-    distances = np.zeros((dimension, dimension))
-        
-    keeptrack = []
-    # TODO: Parallize the following part of code!!
-    # TODO: try smarter way of finding num_lda_hits based on random testing first and then a cutoff 
-    for i, documents in enumerate(BGC_texts):
-        # calculate distances between BGCs
-        print('\r', 'Document ', i, ' of ', len(BGC_texts), end="")
-         
-        query = [word.lower() for word in documents if word not in stopwords] 
-        vec_bow = dictionary.doc2bow(query)
-        vec_lda = lda_model[vec_bow]
-        list_similars = index[vec_lda]
-        list_similars = sorted(enumerate(list_similars), key=lambda item: -item[1])
-        
-        if WMD_refiner:  
-            candidates = [x[0] for x in list_similars[:num_lda_hits] if not x[0] == i]            
-            for m in candidates:
-                if (i, m) not in keeptrack: # avoid double work
-                    distances[i,m] = model_word2vec.wmdistance(BGC_documents[i], BGC_documents[m])
-                    distances[m,i] = distances[i,m]
-                    keeptrack.append((i,m))
-                    keeptrack.append((m,i))
-        else:
-            candidates = [x[0] for x in list_similars[:num_lda_hits] if not x[0] == i]
-            candidate_dist = [x[1] for x in list_similars[:num_lda_hits] if not x[0] == i]
-            for m, neighbor in enumerate(candidates):       
-                distances[i,neighbor] = candidate_dist[m]
-                distances[neighbor,i] = candidate_dist[m]
-        
-    distances[distances > 1E10] = 0  # remove infinity values        
-    return distances
-
-
-def find_nearest_connections(BGC_query,
-                          BGC_documents,
-                          BGC_texts,
-                          dictionary,
-                          corpus,
-                          model_word2vec, 
-                          lda_model,
-                          lda_index = None,
-                          num_lda_hits=50, 
-                          lda_min=0.9995,
-                          stopwords = [],
-                          WMD_refiner = False):
-    # Search nearest neighbors of one BGC, in two steps:
-    # 1- Use cosine measure based on LDA model to select candidates
-    # 2- Calculate distances more accurately for the the top candidates using WMD (slow!)
-    
-    if num_lda_hits > len(BGC_documents):
-        num_lda_hits = len(BGC_documents)
-        print('number of best lda hits to keep is bigger than given dimension.')
-    
-    try: lda_model
-    except NameError: lda_model = None
-    if lda_model is None:
-        print("No lda model found. Calculate new one...")
-        BGC_texts, dictionary, corpus, lda_model = BGC_lda_model(BGC_documents, num_pass=5, num_iter=100)
-    else:
-        print("Lda model found")
-    
-    try: lda_index
-    except NameError: lda_index = None
-    if lda_index is None:
-        print("No lda index found. Calculate new one...")
-        lda_index = gensim.similarities.MatrixSimilarity(lda_model[corpus])
-    else:
-        print("Lda index found")
-    
-    # Calulate distances based on LDA topics...            
-    query = [word.lower() for word in BGC_query if word not in stopwords] 
-    vec_bow = dictionary.doc2bow(query)
-    vec_lda = lda_model[vec_bow]
-    list_similars = lda_index[vec_lda]
-    list_similars = sorted(enumerate(list_similars), key=lambda item: -item[1])
-    list_similars_np = np.array(list_similars)
-    # check that at least all very high (>lda_min) values are included 
-    if np.where(list_similars_np[:,1] > lda_min)[0].shape[0] > num_lda_hits: 
-        updated_hits = np.where(list_similars_np[:,1] > lda_min)[0].shape[0]
-        candidates = [x[0] for x in list_similars[:updated_hits]]
-        distances = np.zeros((updated_hits, 3))
-        distances[:,0] = np.array(candidates) 
-        distances[:,1] = np.array([x[1] for x in list_similars[:updated_hits]])      
-    else:
-        candidates = [x[0] for x in list_similars[:num_lda_hits]]
-        distances = np.zeros((num_lda_hits, 3))
-        distances[:,0] = np.array(candidates) 
-        distances[:,1] = np.array([x[1] for x in list_similars[:num_lda_hits]]) 
-        
-    if WMD_refiner:  
-        for i, m in enumerate(candidates):
-            distances[i,2] = model_word2vec.wmdistance(BGC_query, BGC_documents[m])
-            
-    distances[distances[:,2] > 1E10,2] = np.max(distances[:,2]) # remove infinity values    
-    distances = distances[np.lexsort((distances[:,1], distances[:,2])),:]    
-    return distances, lda_index
 
 
 def BGC_distance_network(Cdistances_ids, Cdistances, filename="Bnet_word2vec_test.graphml", cutoff_dist=0.15):
@@ -369,48 +302,4 @@ def preprocess_document(corpus, stopwords, min_frequency = 2):
     return texts, frequency
 
 
-def create_centroid_vectors_old(corpus, idf_scores, model_word2vec, 
-                            extra_stopwords=[], weighted="tfidf"):
-    """ Calculate centroid vectors for all documents in corpus
-    
-     centroid vector = sum over all word vectors (except words from extra_stopwords)
-     if weighted == "tfidf" --> will be weighted by the tf*idf score
-     if weighted == "idf" --> will be weighted by the idf score
-     
-     Args:
-     --------
-     corpus: 
-         Word corpus
-     idf_scores:
-         
-     model_word2vec
-     extra_stopwords
-     weighted
-     """
-    word_vector_length = model_word2vec.vector_size
-    centroid_vectors = []
-    corpus_size = len(corpus)
-    
-    for n, document in enumerate(corpus):
-        if (n+1) % 100 == 0 or n == corpus_size-1:  # show progress
-                print('\r', ' Calculated centroid vectors for ', n+1, ' of ', corpus_size, ' documents.', end="")
-            
-        word_weight = np.zeros(len(document))
-        word_vector = np.zeros(word_vector_length)
-        if weighted == "idf":
-            tf = 1/(max(1, len(document)))  # term frequency
-        else:
-            tf = 1
-            
-        gen = ((i, word) for (i, word) in enumerate(document) if word not in extra_stopwords)
-        for i, word in gen:
-            if weighted:
-                word_weight[i] = (tf * idf_scores["idf score"][idf_scores["word"] == word]).iloc[0]
-                word_vector = word_vector + word_weight[i]*model_word2vec.wv[word]
-            else:
-                word_vector = word_vector + model_word2vec.wv[word]
-                
-        if weighted:    
-            word_vector = word_vector/np.sum(word_weight)
-        centroid_vectors.append(word_vector)
-    
+

@@ -15,15 +15,45 @@ from scipy.optimize import curve_fit
 
 class Spectrum(object):
     """ Spectrum class to store key information
+    
+    Functions include:
+        - Import data from mass spec files (protoype so far, works with only few formats)
+        - Cleaning/Processing the data, mostly filtering peaks.
+        
+    Args:
+    -------
+    min_frag: float
+        Lower limit of m/z to take into account (Default = 0.0). 
+    max_frag: float
+        Upper limit of m/z to take into account (Default = 1000.0).
+    min_loss: float
+        Lower limit of losses to take into account (Default = 10.0).
+    max_loss: float
+        Upper limit of losses to take into account (Default = 200.0).
+    min_intensity_perc: float
+        Filter out peaks with intensities lower than the min_intensity_perc percentage
+        of the highest peak intensity (Default = 0.0, essentially meaning: OFF).
+    exp_intensity_filter: float
+        Filter out peaks by applying an exponential fit to the intensity histogram.
+        Intensity threshold will be set at where the exponential function will have dropped 
+        to exp_intensity_filter (Default = 0.01).
+    min_peaks: int
+        Minimum number of peaks to keep, unless less are present from the start (Default = 10).
+    merge_energies: bool
+        Merge close peaks or not (False | True, Default is True).
+    merge_ppm: int
+        Merge peaks if their m/z is <= 1e6*merge_ppm (Default = 10).
+    replace: 'max' or None
+        If peaks are merged, either the heighest intensity of both is taken ('max'), 
+        or their intensitites are added (None). 
     """
     def __init__(self, min_frag = 0.0, max_frag = 1000.0,
                  min_loss = 10.0, max_loss = 200.0,
-                 min_intensity = 0.0, 
                  min_intensity_perc = 0.0,
                  exp_intensity_filter = 0.01,
                  min_peaks = 10,
                  merge_energies = True,
-                 merge_ppm = 100,
+                 merge_ppm = 10,
                  replace = 'max'):
 
         self.id = id
@@ -34,7 +64,6 @@ class Spectrum(object):
         self.metadata = {}
         self.family = None
         self.annotations = []
-#        self.InChiKey = []
         self.smiles = []
         
         self.min_frag = min_frag 
@@ -42,7 +71,6 @@ class Spectrum(object):
         self.min_loss = min_loss
         self.max_loss = max_loss
         self.min_intensity_perc = min_intensity_perc
-        self.min_intensity = min_intensity
         self.exp_intensity_filter = exp_intensity_filter
         self.min_peaks = min_peaks
         self.merge_energies = merge_energies
@@ -79,24 +107,23 @@ class Spectrum(object):
                         # If it gets here, its a fragment peak (MS2 level peak)
                         sr = rline.split(' ')
                         mass = float(sr[0])
-                        intensity = float(sr[1])
-                        if intensity >= self.min_intensity:                   
-                            if self.merge_energies and len(temp_mass)>0:
-                                # Compare to other peaks
-                                errs = 1e6*np.abs(mass-np.array(temp_mass))/mass
-                                if errs.min() < self.merge_ppm:
-                                    # Don't add, but merge the intensity
-                                    min_pos = errs.argmin()
-                                    if self.replace == 'max':
-                                        temp_intensity[min_pos] = max(intensity,temp_intensity[min_pos])
-                                    else:
-                                        temp_intensity[min_pos] += intensity
+                        intensity = float(sr[1])                
+                        if self.merge_energies and len(temp_mass)>0:
+                            # Compare to other peaks
+                            errs = 1e6*np.abs(mass-np.array(temp_mass))/mass
+                            if errs.min() < self.merge_ppm:
+                                # Don't add, but merge the intensity
+                                min_pos = errs.argmin()
+                                if self.replace == 'max':
+                                    temp_intensity[min_pos] = max(intensity,temp_intensity[min_pos])
                                 else:
-                                    temp_mass.append(mass)
-                                    temp_intensity.append(intensity)
+                                    temp_intensity[min_pos] += intensity
                             else:
                                 temp_mass.append(mass)
                                 temp_intensity.append(intensity)
+                        else:
+                            temp_mass.append(mass)
+                            temp_intensity.append(intensity)
         
         peaks = list(zip(temp_mass, temp_intensity))
         peaks = process_peaks(peaks, self.min_frag, self.max_frag,
@@ -124,11 +151,14 @@ class Spectrum(object):
         """ 
         MS1_peak = self.parent_mz
 #        peaks = self.peaks
-        losses = self.peaks.copy()
+        losses = np.array(self.peaks.copy())
         losses[:,0] = MS1_peak - losses[:,0]
         keep_idx = np.where((losses[:,0] > self.min_loss) & (losses[:,0] < self.max_loss))[0]
         
-        self.losses = losses[keep_idx,:]
+#        self.losses = losses[keep_idx,:]
+        # TODO: now array is tranfered back to list (to be able to store as json later). Seems weird.
+        losses_list = [(x[0], x[1]) for x in losses[keep_idx,:]]
+        self.losses = losses_list
 
 
 def process_peaks(peaks, min_frag = 0.0,max_frag = 1000.0,
@@ -202,15 +232,17 @@ def process_peaks(peaks, min_frag = 0.0,max_frag = 1000.0,
             peaks = peaks[np.lexsort((peaks[:,0], peaks[:,1])),:][-min_peaks:]
         else:
             peaks = peaks[keep_idx, :]
-        return peaks
+        return [(x[0], x[1]) for x in peaks] # TODO: now array is tranfered back to list (to be able to store as json later). Seems weird.
     else:
-        return peaks
+        return [(x[0], x[1]) for x in peaks]
     
 
-def load_MS_data(path_data, filefilter="*.*", 
+def load_MS_data(path_data, path_json,
+                 filefilter="*.*", 
+                 results_file = None,
+                 num_decimals = 3,
                  min_frag = 0.0, max_frag = 1000.0,
                  min_loss = 10.0, max_loss = 200.0,
-                 min_intensity = 0.0, 
                  min_intensity_perc = 0.0,
                  exp_intensity_filter = 0.01,
                  min_peaks = 10,
@@ -223,33 +255,84 @@ def load_MS_data(path_data, filefilter="*.*",
     
     
     """
-    
+    spectra = []
+    spectra_dict = {}
+    MS_documents = []
+    MS_documents_intensity = []
+
     dirs = os.listdir(path_data)
     spectra_files = fnmatch.filter(dirs, filefilter)
+        
+    if results_file is not None:
+        try: 
+            spectra_dict = functions.json_to_dict(path_json + results_file)
+            print("Spectra json file found and loaded.")
+            collect_new_data = False
+            
+            with open(path_json + results_file[:-4] + "txt", "r") as f:
+                for line in f:
+                    line = line.replace('"', '').replace("'", "").replace("[", "").replace("]", "")
+                    MS_documents.append(line.split(", "))
+                    
+            with open(path_json + results_file[:-5] + "_intensity.txt", "r") as f:
+                for line in f:
+                    line = line.replace("[", "").replace("]", "")
+                    MS_documents_intensity.append([int(x) for x in line.split(", ")])
+                
+        except FileNotFoundError: 
+            print("Could not find file ", path_json,  results_file) 
+            collect_new_data = True
     
-    spectra = []
-    # run over all spectrum files:
-    for i, file in enumerate(spectra_files):
-        # Show progress
-        if (i+1) % 10 == 0 or i == len(spectra_files)-1:  
-            print('\r', ' Load spectrum ', i+1, ' of ', len(spectra_files), ' spectra.', end="")
+    
+    # Read data from files if no pre-stored data is found:
+    if spectra_dict == {} or results_file is None:
+
+        # Run over all spectrum files:
+        for i, filename in enumerate(spectra_files):
+            
+            # Show progress
+            if (i+1) % 10 == 0 or i == len(spectra_files)-1:  
+                print('\r', ' Load spectrum ', i+1, ' of ', len(spectra_files), ' spectra.', end="")
+            
+            spectrum = Spectrum(min_frag = min_frag, 
+                                max_frag = max_frag,
+                                min_loss = min_loss, 
+                                max_loss = max_loss,
+                                min_intensity_perc = min_intensity_perc,
+                                exp_intensity_filter = exp_intensity_filter,
+                                min_peaks = min_peaks,
+                                merge_energies = merge_energies,
+                                merge_ppm = merge_ppm,
+                                replace = replace)
+            
+            # Load spectrum data from file:
+            spectrum.read_spectrum(path_data, filename, i)
+            
+            # Calculate losses:
+            spectrum.get_losses()
+            
+            # Collect in form of list of spectrum objects, and as dictionary
+            spectra.append(spectrum)
+            spectra_dict[filename] = spectrum.__dict__
         
-        spectrum = Spectrum(min_frag = min_frag, 
-                            max_frag = max_frag,
-                            min_loss = min_loss, 
-                            max_loss = max_loss,
-                            min_intensity = min_intensity,
-                            min_intensity_perc = min_intensity_perc,
-                            exp_intensity_filter = exp_intensity_filter,
-                            min_peaks = min_peaks,
-                            merge_energies = merge_energies,
-                            merge_ppm = merge_ppm,
-                            replace = replace)
-        spectrum.read_spectrum(path_data, file, i)
-        spectrum.get_losses()
-        spectra.append(spectrum)
+        MS_documents, MS_documents_intensity = create_MS_documents(spectra, num_decimals)
         
-    return spectra
+        
+        # Save collected data
+        if collect_new_data == True:
+            
+            functions.dict_to_json(spectra_dict, path_json + results_file)     
+            # Store documents
+            with open(path_json + results_file[:-4] + "txt", "w") as f:
+                for s in MS_documents:
+                    f.write(str(s) +"\n")
+                    
+            with open(path_json + results_file[:-5] + "_intensity.txt", "w") as f:
+                for s in MS_documents_intensity:
+                    f.write(str(s) +"\n")
+                    
+        
+    return spectra, spectra_dict, MS_documents, MS_documents_intensity
 
 
 
@@ -274,8 +357,8 @@ def create_MS_documents(spectra, num_decimals):
     for i, spectrum in enumerate(spectra):
         doc = []
         doc_intensity = []
-        losses = spectrum.losses 
-        peaks = spectrum.peaks
+        losses = np.array(spectrum.losses)
+        peaks = np.array(spectrum.peaks)
 
         if (i+1) % 100 == 0 or i == len(spectra)-1:  # show progress
                 print('\r', ' Created documents for ', i+1, ' of ', len(spectra), ' spectra.', end="")
