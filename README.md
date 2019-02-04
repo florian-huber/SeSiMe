@@ -1,5 +1,5 @@
 # SeSiMe
-Sentence/Sequence Similarity Measures 
+#### (Sentence/Sequence Similarity Measures)
 
 Protoype name. And prototyoe code.
 
