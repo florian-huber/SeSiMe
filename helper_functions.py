@@ -7,6 +7,9 @@ Small helperfunctions for the omics project (NLeSC, 2018, 2019..)
 from __future__ import print_function
 import numpy as np
 from scipy import spatial
+import json
+import math
+import pandas as pd
 
 ##
 ## ---------------- Document processing functions -----------------------------
@@ -70,12 +73,6 @@ def create_distance_network(Cdistances_ids, Cdistances, filename="word2vec_test.
     return Bnet
 
 
-
-
-
-import json
-import math
-import pandas as pd
 
 ##
 ## ---------------- General functions ----------------------------------------
