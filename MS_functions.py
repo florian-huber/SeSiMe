@@ -13,12 +13,18 @@ import fnmatch
 import numpy as np
 from scipy.optimize import curve_fit
 
+
+## ----------------------------------------------------------------------------
+## ---------------------------- Spectrum class --------------------------------
+## ----------------------------------------------------------------------------
+
 class Spectrum(object):
     """ Spectrum class to store key information
     
     Functions include:
         - Import data from mass spec files (protoype so far, works with only few formats)
-        - Cleaning/Processing the data, mostly filtering peaks.
+        - Calculate losses from peaks.
+        - Process / filter peaks
         
     Args:
     -------
@@ -126,116 +132,89 @@ class Spectrum(object):
                             temp_intensity.append(intensity)
         
         peaks = list(zip(temp_mass, temp_intensity))
-        peaks = process_peaks(peaks, self.min_frag, self.max_frag,
-                              self.min_intensity_perc, self.exp_intensity_filter, self.min_peaks)
+        peaks = self.process_peaks(peaks)
         
         self.peaks = peaks
-                
-#                    functions.dict_to_json(self.BGC_data_dict, path_json + results_file)     
-#                    # store documents (PFAM domains per BGC)
-#                    with open(path_json + results_file[:-4] + "txt", "w") as f:
-#                        for s in self.BGC_documents:
-#                            f.write(str(s) +"\n")
-
 
 
     def get_losses(self):
-        """ Process peaks
-        Remove peaks outside window min_frag <-> max_frag.
-        Remove peaks with intensities < min_intensity_perc/100*max(intensities)
-        """
         """ Use spectrum class and extract peaks and losses
         Losses are here the differences between the spectrum precursor mz and the MS2 level peaks.
         
         Remove losses outside window min_loss <-> max_loss.
         """ 
+        
         MS1_peak = self.parent_mz
-#        peaks = self.peaks
         losses = np.array(self.peaks.copy())
         losses[:,0] = MS1_peak - losses[:,0]
         keep_idx = np.where((losses[:,0] > self.min_loss) & (losses[:,0] < self.max_loss))[0]
         
-#        self.losses = losses[keep_idx,:]
         # TODO: now array is tranfered back to list (to be able to store as json later). Seems weird.
         losses_list = [(x[0], x[1]) for x in losses[keep_idx,:]]
         self.losses = losses_list
 
 
-def process_peaks(peaks, min_frag = 0.0,max_frag = 1000.0,
-                  min_intensity_perc = 0.0,
-                  exp_intensity_filter = 0.01,
-                  min_peaks = 10):
-    """ Process peaks
-    Remove peaks outside window min_frag <-> max_frag.
-    Remove peaks with intensities < min_intensity_perc/100*max(intensities)
-    
-    Args:
-    -------
-    peaks: list, numpy array
-        List or array of peaks (m/z, intensity).
-    min_frag: float
-        Minimum allowed fragment m/z.
-    max_frag: float
-        Maximum allowed fragment m/z.
-    min_intensity_perc: float
-        Minimium intensity (in precentage of the maximum intensity).
-    exp_intensity_filter: float
+    def process_peaks(self, peaks):
+        """ Process peaks
+        
+        Remove peaks outside window min_frag <-> max_frag.
+        Remove peaks with intensities < min_intensity_perc/100*max(intensities)
+        
         Uses exponential fit to intensity histogram. Threshold for maximum allowed peak
         intensity will be set where the exponential fit reaches exp_intensity_filter.
-    min_peaks: int
-        Minimum amount of peaks to keep (if so many exist in spectrum).
-    
-    """
-    def exponential_func(x, a, b):
-        return a*np.exp(-b*x)
-   
-    if isinstance(peaks, list):
-        peaks = np.array(peaks)
-        if peaks.shape[1] != 2:
-            print("Peaks were given in unexpected format...")
-    
-    intensity_thres = np.max(peaks[:,1]) * min_intensity_perc/100
-    keep_idx = np.where((peaks[:,0] > min_frag) & (peaks[:,0] < max_frag) & (peaks[:,1] > intensity_thres))[0]
-    if (len(keep_idx) < min_peaks):
-        peaks = peaks[np.lexsort((peaks[:,0], peaks[:,1])),:][-min(min_peaks, len(peaks)):]
-    else:
-        peaks = peaks[keep_idx,:]
-#    print("No of peaks after 1st filter: ", len(peaks))
-    if (exp_intensity_filter is not None) and len(peaks) > 2*min_peaks:
-        # Fit exponential to peak intensity distribution 
-        num_bins = 100  # number of bins for histogram
-
-        # remove highest peak
-        peaks2 = peaks.copy()
-        peaks2[np.where(peaks2[:,1] == np.max(peaks2[:,1])),:] = 0
-        hist, bins = np.histogram(peaks2[:,1], bins=num_bins)
-        start = np.where(hist == np.max(hist))[0][0]  # take maximum intensity bin as starting point
-        last = int(num_bins/2)
-        x = bins[start:last]
-        y = hist[start:last]
-        try:
-            popt, pcov = curve_fit(exponential_func, x , y, p0=(peaks.shape[0], 1e-4)) 
-            threshold = -np.log(exp_intensity_filter)/popt[1]
-        except RuntimeError:
-            print("RuntimeError for ", len(peaks), " peaks. Use mean intensity as threshold.")
-            threshold = np.mean(peaks2[:,1])
-        except TypeError:
-            print("Unclear TypeError for ", len(peaks), " peaks. Use mean intensity as threshold.")
-            print(x, "and y: ", y)
-            threshold = np.mean(peaks2[:,1])
+       
+        """
+        def exponential_func(x, a, b):
+            return a*np.exp(-b*x)
+       
+        if isinstance(peaks, list):
+            peaks = np.array(peaks)
+            if peaks.shape[1] != 2:
+                print("Peaks were given in unexpected format...")
         
-#        print("Set threshold at: ", threshold)
-#        print("Would take ", np.sum(peaks[:,1] > threshold), " of ", len(peaks), "peaks.")
-    
-        keep_idx = np.where(peaks[:,1] > threshold)[0]
-        if len(keep_idx) < min_peaks:
-            peaks = peaks[np.lexsort((peaks[:,0], peaks[:,1])),:][-min_peaks:]
+        intensity_thres = np.max(peaks[:,1]) * self.min_intensity_perc/100
+        keep_idx = np.where((peaks[:,0] > self.min_frag) & (peaks[:,0] < self.max_frag) & (peaks[:,1] > intensity_thres))[0]
+        if (len(keep_idx) < self.min_peaks):
+            peaks = peaks[np.lexsort((peaks[:,0], peaks[:,1])),:][-min(self.min_peaks, len(peaks)):]
         else:
-            peaks = peaks[keep_idx, :]
-        return [(x[0], x[1]) for x in peaks] # TODO: now array is tranfered back to list (to be able to store as json later). Seems weird.
-    else:
-        return [(x[0], x[1]) for x in peaks]
+            peaks = peaks[keep_idx,:]
     
+        if (self.exp_intensity_filter is not None) and len(peaks) > 2*self.min_peaks:
+            # Fit exponential to peak intensity distribution 
+            num_bins = 100  # number of bins for histogram
+    
+            # Ignore highest peak for further analysis 
+            peaks2 = peaks.copy()
+            peaks2[np.where(peaks2[:,1] == np.max(peaks2[:,1])),:] = 0
+            hist, bins = np.histogram(peaks2[:,1], bins=num_bins)
+            start = np.where(hist == np.max(hist))[0][0]  # take maximum intensity bin as starting point
+            last = int(num_bins/2)
+            x = bins[start:last]
+            y = hist[start:last]
+            try:
+                popt, pcov = curve_fit(exponential_func, x , y, p0=(peaks.shape[0], 1e-4)) 
+                threshold = -np.log(self.exp_intensity_filter)/popt[1]
+            except RuntimeError:
+                print("RuntimeError for ", len(peaks), " peaks. Use mean intensity as threshold.")
+                threshold = np.mean(peaks2[:,1])
+            except TypeError:
+                print("Unclear TypeError for ", len(peaks), " peaks. Use mean intensity as threshold.")
+                print(x, "and y: ", y)
+                threshold = np.mean(peaks2[:,1])
+    
+            keep_idx = np.where(peaks[:,1] > threshold)[0]
+            if len(keep_idx) < self.min_peaks:
+                peaks = peaks[np.lexsort((peaks[:,0], peaks[:,1])),:][-self.min_peaks:]
+            else:
+                peaks = peaks[keep_idx, :]
+            return [(x[0], x[1]) for x in peaks] # TODO: now array is transfered back to list (to be able to store as json later). Seems weird.
+        else:
+            return [(x[0], x[1]) for x in peaks]
+
+
+## ----------------------------------------------------------------------------
+## -------------------------- Functions to load MS data------------------------
+## ----------------------------------------------------------------------------
 
 def load_MS_data(path_data, path_json,
                  filefilter="*.*", 
@@ -250,11 +229,10 @@ def load_MS_data(path_data, path_json,
                  merge_ppm = 10,
                  replace = 'max'):        
     """ Collect spectra from set of files
-    Partly taken from ms2ldaviz 
-    
-    
-    
+    Partly taken from ms2ldaviz.
+    Prototype. Needs to be replaces by more versatile parser, accepting more MS data formats.
     """
+
     spectra = []
     spectra_dict = {}
     MS_documents = []
@@ -282,8 +260,7 @@ def load_MS_data(path_data, path_json,
         except FileNotFoundError: 
             print("Could not find file ", path_json,  results_file) 
             collect_new_data = True
-    
-    
+
     # Read data from files if no pre-stored data is found:
     if spectra_dict == {} or results_file is None:
 
@@ -316,8 +293,7 @@ def load_MS_data(path_data, path_json,
             spectra_dict[filename] = spectrum.__dict__
         
         MS_documents, MS_documents_intensity = create_MS_documents(spectra, num_decimals)
-        
-        
+
         # Save collected data
         if collect_new_data == True:
             
@@ -330,11 +306,8 @@ def load_MS_data(path_data, path_json,
             with open(path_json + results_file[:-5] + "_intensity.txt", "w") as f:
                 for s in MS_documents_intensity:
                     f.write(str(s) +"\n")
-                    
-        
+
     return spectra, spectra_dict, MS_documents, MS_documents_intensity
-
-
 
 
 def create_MS_documents(spectra, num_decimals):
@@ -380,9 +353,9 @@ def create_MS_documents(spectra, num_decimals):
 
 
 
-##
+## ----------------------------------------------------------------------------
 ## ---------------------------- Plotting functions ----------------------------
-## 
+## ----------------------------------------------------------------------------
 
 from rdkit import Chem
 from rdkit.Chem import Draw
@@ -394,7 +367,7 @@ def plot_smiles(query_id, spectra_dict, MS_measure, num_candidates = 10,
     """ Plot molecules for closest candidates
     
     """
-    
+
     # Select chosen distance methods
     if dist_method == "centroid":
         candidates_idx = MS_measure.Cdistances_ctr_idx[query_id, :num_candidates]
@@ -417,10 +390,7 @@ def plot_smiles(query_id, spectra_dict, MS_measure, num_candidates = 10,
     else:
         print("Chosen distance measuring method not found.")
 
-    
-    
     size = (200, 200)  # Smaller figures than the default
-#    idx = candidates_idx[query_id,:num_candidates]
 
     keys = []
     for key, value in spectra_dict.items():
@@ -439,7 +409,4 @@ def plot_smiles(query_id, spectra_dict, MS_measure, num_candidates = 10,
     if plot_type != "single":    # this will only work if there's no conflict with rdkit and pillow...       
         Chem.Draw.MolsToGridImage(molecules,legends=[mol.GetProp('_Name') for mol in molecules])
 
-#    for id in idx:
-#        m = Chem.MolFromSmiles(spectra[id].smiles)
-#        Draw.MolToMPL(m, size=size)
 
