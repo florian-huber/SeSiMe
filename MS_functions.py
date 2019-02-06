@@ -132,7 +132,10 @@ class Spectrum(object):
                             temp_intensity.append(intensity)
         
         peaks = list(zip(temp_mass, temp_intensity))
-        peaks = self.process_peaks(peaks)
+#        peaks = self.process_peaks(peaks)
+        peaks = process_peaks(peaks, self.min_frag, self.max_frag,
+                              self.min_intensity_perc, self.exp_intensity_filter,
+                              self.min_peaks)
         
         self.peaks = peaks
 
@@ -154,62 +157,81 @@ class Spectrum(object):
         self.losses = losses_list
 
 
-    def process_peaks(self, peaks):
-        """ Process peaks
-        
-        Remove peaks outside window min_frag <-> max_frag.
-        Remove peaks with intensities < min_intensity_perc/100*max(intensities)
-        
-        Uses exponential fit to intensity histogram. Threshold for maximum allowed peak
-        intensity will be set where the exponential fit reaches exp_intensity_filter.
-       
-        """
-        def exponential_func(x, a, b):
-            return a*np.exp(-b*x)
-       
-        if isinstance(peaks, list):
-            peaks = np.array(peaks)
-            if peaks.shape[1] != 2:
-                print("Peaks were given in unexpected format...")
-        
-        intensity_thres = np.max(peaks[:,1]) * self.min_intensity_perc/100
-        keep_idx = np.where((peaks[:,0] > self.min_frag) & (peaks[:,0] < self.max_frag) & (peaks[:,1] > intensity_thres))[0]
-        if (len(keep_idx) < self.min_peaks):
-            peaks = peaks[np.lexsort((peaks[:,0], peaks[:,1])),:][-min(self.min_peaks, len(peaks)):]
+def process_peaks(peaks, min_frag, max_frag, 
+                  min_intensity_perc,
+                  exp_intensity_filter,
+                  min_peaks):
+    """ Process peaks
+    
+    Remove peaks outside window min_frag <-> max_frag.
+    Remove peaks with intensities < min_intensity_perc/100*max(intensities)
+    
+    Uses exponential fit to intensity histogram. Threshold for maximum allowed peak
+    intensity will be set where the exponential fit reaches exp_intensity_filter.
+    
+    Args:
+    -------
+    min_frag: float
+        Lower limit of m/z to take into account (Default = 0.0). 
+    max_frag: float
+        Upper limit of m/z to take into account (Default = 1000.0).
+    min_intensity_perc: float
+        Filter out peaks with intensities lower than the min_intensity_perc percentage
+        of the highest peak intensity (Default = 0.0, essentially meaning: OFF).
+    exp_intensity_filter: float
+        Filter out peaks by applying an exponential fit to the intensity histogram.
+        Intensity threshold will be set at where the exponential function will have dropped 
+        to exp_intensity_filter (Default = 0.01).
+    min_peaks: int
+        Minimum number of peaks to keep, unless less are present from the start (Default = 10).
+   
+    """
+    def exponential_func(x, a, b):
+        return a*np.exp(-b*x)
+   
+    if isinstance(peaks, list):
+        peaks = np.array(peaks)
+        if peaks.shape[1] != 2:
+            print("Peaks were given in unexpected format...")
+    
+    intensity_thres = np.max(peaks[:,1]) * min_intensity_perc/100
+    keep_idx = np.where((peaks[:,0] > min_frag) & (peaks[:,0] < max_frag) & (peaks[:,1] > intensity_thres))[0]
+    if (len(keep_idx) < min_peaks):
+        peaks = peaks[np.lexsort((peaks[:,0], peaks[:,1])),:][-min(min_peaks, len(peaks)):]
+    else:
+        peaks = peaks[keep_idx,:]
+
+    if (exp_intensity_filter is not None) and len(peaks) > 2*min_peaks:
+        # Fit exponential to peak intensity distribution 
+        num_bins = 100  # number of bins for histogram
+
+        # Ignore highest peak for further analysis 
+        peaks2 = peaks.copy()
+        peaks2[np.where(peaks2[:,1] == np.max(peaks2[:,1])),:] = 0
+        hist, bins = np.histogram(peaks2[:,1], bins=num_bins)
+        start = np.where(hist == np.max(hist))[0][0]  # take maximum intensity bin as starting point
+        last = int(num_bins/2)
+        x = bins[start:last]
+        y = hist[start:last]
+        try:
+            popt, pcov = curve_fit(exponential_func, x , y, p0=(peaks.shape[0], 1e-4)) 
+            threshold = -np.log(exp_intensity_filter)/popt[1]
+        except RuntimeError:
+            print("RuntimeError for ", len(peaks), " peaks. Use mean intensity as threshold.")
+            threshold = np.mean(peaks2[:,1])
+        except TypeError:
+            print("Unclear TypeError for ", len(peaks), " peaks. Use mean intensity as threshold.")
+            print(x, "and y: ", y)
+            threshold = np.mean(peaks2[:,1])
+
+        keep_idx = np.where(peaks[:,1] > threshold)[0]
+        if len(keep_idx) < min_peaks:
+            peaks = peaks[np.lexsort((peaks[:,0], peaks[:,1])),:][-min_peaks:]
         else:
-            peaks = peaks[keep_idx,:]
-    
-        if (self.exp_intensity_filter is not None) and len(peaks) > 2*self.min_peaks:
-            # Fit exponential to peak intensity distribution 
-            num_bins = 100  # number of bins for histogram
-    
-            # Ignore highest peak for further analysis 
-            peaks2 = peaks.copy()
-            peaks2[np.where(peaks2[:,1] == np.max(peaks2[:,1])),:] = 0
-            hist, bins = np.histogram(peaks2[:,1], bins=num_bins)
-            start = np.where(hist == np.max(hist))[0][0]  # take maximum intensity bin as starting point
-            last = int(num_bins/2)
-            x = bins[start:last]
-            y = hist[start:last]
-            try:
-                popt, pcov = curve_fit(exponential_func, x , y, p0=(peaks.shape[0], 1e-4)) 
-                threshold = -np.log(self.exp_intensity_filter)/popt[1]
-            except RuntimeError:
-                print("RuntimeError for ", len(peaks), " peaks. Use mean intensity as threshold.")
-                threshold = np.mean(peaks2[:,1])
-            except TypeError:
-                print("Unclear TypeError for ", len(peaks), " peaks. Use mean intensity as threshold.")
-                print(x, "and y: ", y)
-                threshold = np.mean(peaks2[:,1])
-    
-            keep_idx = np.where(peaks[:,1] > threshold)[0]
-            if len(keep_idx) < self.min_peaks:
-                peaks = peaks[np.lexsort((peaks[:,0], peaks[:,1])),:][-self.min_peaks:]
-            else:
-                peaks = peaks[keep_idx, :]
-            return [(x[0], x[1]) for x in peaks] # TODO: now array is transfered back to list (to be able to store as json later). Seems weird.
-        else:
-            return [(x[0], x[1]) for x in peaks]
+            peaks = peaks[keep_idx, :]
+        return [(x[0], x[1]) for x in peaks] # TODO: now array is transfered back to list (to be able to store as json later). Seems weird.
+    else:
+        return [(x[0], x[1]) for x in peaks]
 
 
 ## ----------------------------------------------------------------------------
