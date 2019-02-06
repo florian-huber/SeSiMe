@@ -383,7 +383,7 @@ from rdkit import Chem
 from rdkit.Chem import Draw
 
 
-def plot_smiles(query_id, spectra_dict, MS_measure, num_candidates = 10,
+def plot_smiles(query_id, spectra, MS_measure, num_candidates = 10,
                    sharex=True, labels=False, dist_method = "centroid",
                    plot_type = "single"):
     """ Plot molecules for closest candidates
@@ -414,21 +414,37 @@ def plot_smiles(query_id, spectra_dict, MS_measure, num_candidates = 10,
 
     size = (200, 200)  # Smaller figures than the default
 
-    keys = []
-    for key, value in spectra_dict.items():
-        keys.append(key)  
+    if isinstance(spectra, dict):
+        # If spectra is given as a dictionary
+        keys = []
+        for key, value in spectra.items():
+            keys.append(key)  
+            
+        smiles = []  
+        molecules = []
+        for i, candidate_id in enumerate(candidates_idx):
+            key = keys[candidate_id]
+            smiles.append(spectra[key]["smiles"])
+            mol = Chem.MolFromSmiles(smiles[i])
+            mol.SetProp('_Name', smiles[i])
+            if plot_type == 'single':
+                Draw.MolToMPL(mol, size=size)
         
-    smiles = []  
-    molecules = []
-    for i, candidate_id in enumerate(candidates_idx):
-        key = keys[candidate_id]
-        smiles.append(spectra_dict[key]["smiles"])
-        mol = Chem.MolFromSmiles(smiles[i])
-        mol.SetProp('_Name', smiles[i])
-        if plot_type == 'single':
-            Draw.MolToMPL(mol, size=size)
-    
-    if plot_type != "single":    # this will only work if there's no conflict with rdkit and pillow...       
-        Chem.Draw.MolsToGridImage(molecules,legends=[mol.GetProp('_Name') for mol in molecules])
+        if plot_type != "single":    # this will only work if there's no conflict with rdkit and pillow...       
+            Chem.Draw.MolsToGridImage(molecules,legends=[mol.GetProp('_Name') for mol in molecules])
+            
+    elif isinstance(spectra, list):
+        # Assume that it is then a list of Spectrum objects
+        
+        smiles = []  
+        for i, candidate_id in enumerate(candidates_idx):
+            smiles.append(spectra[candidate_id].metadata["smiles"])
+            mol = Chem.MolFromSmiles(smiles[i])
+            mol.SetProp('_Name', smiles[i])
+            if plot_type == 'single':
+                Draw.MolToMPL(mol, size=size)
+        
+        if plot_type != "single":    # this will only work if there's no conflict with rdkit and pillow...       
+            Chem.Draw.MolsToGridImage(molecules,legends=[mol.GetProp('_Name') for mol in molecules])
 
 
