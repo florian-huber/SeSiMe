@@ -282,6 +282,7 @@ def load_MS_data(path_data, path_json,
                 
         except FileNotFoundError: 
             print("Could not find file ", path_json,  results_file) 
+            print("New data from ", path_data, " will be imported.")
             collect_new_data = True
 
     # Read data from files if no pre-stored data is found:
@@ -374,6 +375,7 @@ def load_MGF_data(path_json,
                 
         except FileNotFoundError: 
             print("Could not find file ", path_json,  results_file) 
+            print("Data will be impted from ", results_file)
 
     # Read data from files if no pre-stored data is found:
     if spectra_dict == {} or results_file is None:
