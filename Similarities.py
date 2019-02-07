@@ -407,9 +407,10 @@ class SimilarityMeasures():
         """
         Cdistances_idx, Cdistances = functions.calculate_distances(self.vectors_centroid, 
                                                                    num_hits, method = method)
-        
+        print("Calculated distances between ", Cdistances.shape[0], " documents.")
         self.Cdistances_ctr_idx = Cdistances_idx
         self.Cdistances_ctr = Cdistances
+
 
 
     def get_autoencoder_distances(self, num_hits=25, method='cosine'):

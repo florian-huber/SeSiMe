@@ -10,6 +10,7 @@ TODO: add liscence
 import os
 import helper_functions as functions
 import fnmatch
+import copy
 import numpy as np
 from scipy.optimize import curve_fit
 
@@ -332,7 +333,128 @@ def load_MS_data(path_data, path_json,
     return spectra, spectra_dict, MS_documents, MS_documents_intensity
 
 
-def create_MS_documents(spectra, num_decimals):
+
+def load_MGF_data(path_json,
+                  mgf_file, 
+                 results_file = None,
+                 num_decimals = 3,
+                 min_frag = 0.0, max_frag = 1000.0,
+                 min_loss = 10.0, max_loss = 200.0,
+                 exp_intensity_filter = 0.01,
+                 min_peaks = 10,
+                 peaks_per_mz = 20/200):        
+    """ Collect spectra from MGF file
+    Partly taken from ms2ldaviz.
+    Prototype. Needs to be replaces by more versatile parser, accepting more MS data formats.
+    """
+    from parsers import LoadMGF
+    from metabolomics import load_spectra
+    
+    spectra = []
+    spectra_dict = {}
+    MS_documents = []
+    MS_documents_intensity = []
+    collect_new_data = True
+        
+    if results_file is not None:
+        try: 
+            spectra_dict = functions.json_to_dict(path_json + results_file)
+            print("Spectra json file found and loaded.")
+            collect_new_data = False
+            
+            with open(path_json + results_file[:-4] + "txt", "r") as f:
+                for line in f:
+                    line = line.replace('"', '').replace("'", "").replace("[", "").replace("]", "").replace("\n", "")
+                    MS_documents.append(line.split(", "))
+                    
+            with open(path_json + results_file[:-5] + "_intensity.txt", "r") as f:
+                for line in f:
+                    line = line.replace("[", "").replace("]", "")
+                    MS_documents_intensity.append([int(x) for x in line.split(", ")])
+                
+        except FileNotFoundError: 
+            print("Could not find file ", path_json,  results_file) 
+
+    # Read data from files if no pre-stored data is found:
+    if spectra_dict == {} or results_file is None:
+
+        # Load mgf file
+        spectra = load_spectra(mgf_file)
+        # Load metadata
+        ms1, ms2, metadata = LoadMGF(name_field='scans').load_spectra([mgf_file])
+
+        for spec in spectra:
+            id = spec.spectrum_id
+            spec.metadata = metadata[id]
+
+        min_peak_absolute = min_peaks
+        
+        # Scale the min_peak filter
+        def min_peak_scaling(x, A, B):
+            return int(A + B * x)
+        
+        for spec in spectra:
+            peaks = spec.peaks.copy()
+            
+            # Scale the min_peak filter
+            min_peaks = min_peak_scaling(spec.precursor_mz, min_peak_absolute, peaks_per_mz)
+            
+            if len(peaks) > min_peaks:
+                peaks = process_peaks(peaks, 
+                                       min_frag = min_frag, 
+                                       max_frag = max_frag,
+                                       min_intensity_perc = 0.0,
+                                       exp_intensity_filter = exp_intensity_filter,
+                                       min_peaks = min_peaks)
+            spec.peaks = peaks
+            
+            
+        # filter out spectra with few peaks
+        min_peaks_absolute = 10
+        num_peaks_initial = len(spectra)
+        spectra = [copy.deepcopy(x) for x in spectra if len(x.peaks)>=min_peaks_absolute]
+        print("Take ", len(spectra), "peaks out of ", num_peaks_initial, ".")
+
+
+        # Transfer object to dictionary
+        spectra_dict = {}
+        for spec in spectra:
+            spectra_dict[spec.spectrum_id] = spec.__dict__
+            spectra_dict[spec.spectrum_id]["smiles"] = spec.metadata["smiles"]
+                    
+        #            # Calculate losses
+        #            losses = np.array(peaks.copy())
+        #            losses[:,0] = spec.precursor_mz - losses[:,0]
+        #            
+        #            keep_idx = np.where((losses[:,0] > min_loss) & (losses[:,0] < max_loss))[0]                        
+        #            losses = losses[keep_idx,:]
+        #            
+        #            spec.losses = [(x[0], x[1]) for x in losses]
+        #            
+
+        # Create documents from peaks (and losses)
+        MS_documents, MS_documents_intensity = create_MS_documents(spectra, num_decimals,
+                                                                   min_loss, max_loss)
+
+        # Save collected data
+        if collect_new_data == True:
+            
+            functions.dict_to_json(spectra_dict, path_json + results_file)     
+            # Store documents
+            with open(path_json + results_file[:-4] + "txt", "w") as f:
+                for s in MS_documents:
+                    f.write(str(s) +"\n")
+                    
+            with open(path_json + results_file[:-5] + "_intensity.txt", "w") as f:
+                for s in MS_documents_intensity:
+                    f.write(str(s) +"\n")
+
+    return spectra, spectra_dict, MS_documents, MS_documents_intensity
+
+
+
+def create_MS_documents(spectra, num_decimals,
+                        min_loss = 10.0, max_loss = 200.0):
     """ Create documents from peaks and losses.
     
     Every peak and every loss will be transformed into a WORD.
@@ -344,7 +466,10 @@ def create_MS_documents(spectra, num_decimals):
         List of all spectrum class elements = all spectra to be in corpus
     num_decimals: int
         Number of decimals to take into account
-    
+    min_loss: float
+        Lower limit of losses to take into account (Default = 10.0).
+    max_loss: float
+        Upper limit of losses to take into account (Default = 200.0).
     """
     MS_documents = []
     MS_documents_intensity = []
@@ -353,6 +478,9 @@ def create_MS_documents(spectra, num_decimals):
         doc = []
         doc_intensity = []
         losses = np.array(spectrum.losses)
+        keep_idx = np.where((losses[:,0] > min_loss) & (losses[:,0] < max_loss))[0]                        
+        losses = losses[keep_idx,:]
+        
         peaks = np.array(spectrum.peaks)
 
         if (i+1) % 100 == 0 or i == len(spectra)-1:  # show progress
@@ -381,7 +509,7 @@ def create_MS_documents(spectra, num_decimals):
 
 from rdkit import Chem
 from rdkit.Chem import Draw
-
+from matplotlib import pyplot as plt
 
 def plot_smiles(query_id, spectra, MS_measure, num_candidates = 10,
                    sharex=True, labels=False, dist_method = "centroid",
@@ -422,13 +550,15 @@ def plot_smiles(query_id, spectra, MS_measure, num_candidates = 10,
             
         smiles = []  
         molecules = []
+        
         for i, candidate_id in enumerate(candidates_idx):
             key = keys[candidate_id]
             smiles.append(spectra[key]["smiles"])
             mol = Chem.MolFromSmiles(smiles[i])
-            mol.SetProp('_Name', smiles[i])
-            if plot_type == 'single':
-                Draw.MolToMPL(mol, size=size)
+            if mol != None:
+                mol.SetProp('_Name', smiles[i])
+                if plot_type == 'single':
+                    Draw.MolToMPL(mol, size=size)
         
         if plot_type != "single":    # this will only work if there's no conflict with rdkit and pillow...       
             Chem.Draw.MolsToGridImage(molecules,legends=[mol.GetProp('_Name') for mol in molecules])
@@ -440,7 +570,7 @@ def plot_smiles(query_id, spectra, MS_measure, num_candidates = 10,
         for i, candidate_id in enumerate(candidates_idx):
             smiles.append(spectra[candidate_id].metadata["smiles"])
             mol = Chem.MolFromSmiles(smiles[i])
-            mol.SetProp('_Name', smiles[i])
+#            mol.SetProp('_Name', smiles[i])
             if plot_type == 'single':
                 Draw.MolToMPL(mol, size=size)
         
