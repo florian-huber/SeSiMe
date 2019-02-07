@@ -8,6 +8,7 @@ import gensim
 from gensim import corpora
 from gensim import models
 from gensim.test.utils import get_tmpfile
+from gensim.models.callbacks import CallbackAny2Vec
 
 from scipy import spatial
 
@@ -19,6 +20,16 @@ from keras.layers import Input, Dense
 
 import helper_functions as functions
 
+
+        
+class EpochLogger(CallbackAny2Vec):
+    '''Callback to log information about training'''
+    def __init__(self, num_of_epochs):
+        self.epoch = 0
+        self.num_of_epochs = num_of_epochs
+    def on_epoch_end(self, model):
+        print('\r', 'Epoch ', (self.epoch+1), ' of ', self.num_of_epochs, '.' , end="")
+        self.epoch += 1
 
 class SimilarityMeasures():
     """ Class to run different similarity measure on sentence-like data.
@@ -114,6 +125,7 @@ class SimilarityMeasures():
         self.bow_corpus = [self.dictionary.doc2bow(text) for text in self.corpus]
 
 
+
 ##
 ## -------------------- Model building & training  ----------------------------
 ## 
@@ -123,6 +135,8 @@ class SimilarityMeasures():
         """ Build Word2Vec model (using gensim)
         TODO: show progress along epochs/iter
         """
+        
+        epoch_logger = EpochLogger(iter)
 
         # Check if model already exists and should be loaded
         if os.path.isfile(file_model_word2vec) and use_stored_model:   
@@ -139,7 +153,8 @@ class SimilarityMeasures():
             # Train word2vec model
             self.model_word2vec = gensim.models.Word2Vec(self.corpus, size=size,
                                                          window=window, min_count=min_count, 
-                                                         workers=workers, iter=iter)
+                                                         workers=workers, iter=iter, 
+                                                         seed=42, callbacks=[epoch_logger])
             
             # Save model
             self.model_word2vec.save(file_model_word2vec)
