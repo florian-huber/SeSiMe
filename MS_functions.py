@@ -482,8 +482,11 @@ def create_MS_documents(spectra, num_decimals,
         losses = np.array(spectrum.losses)
         keep_idx = np.where((losses[:,0] > min_loss) & (losses[:,0] < max_loss))[0]                        
         losses = losses[keep_idx,:]
-        
         peaks = np.array(spectrum.peaks)
+        
+        # Sort peaks and losses by m/z 
+        peaks = peaks[np.lexsort((peaks[:,1], peaks[:,0])),:]
+        losses = losses[np.lexsort((losses[:,1], losses[:,0])),:]
 
         if (i+1) % 100 == 0 or i == len(spectra)-1:  # show progress
                 print('\r', ' Created documents for ', i+1, ' of ', len(spectra), ' spectra.', end="")
@@ -496,7 +499,6 @@ def create_MS_documents(spectra, num_decimals,
             doc.append("loss_"  + "{:.{}f}".format(losses[i,0], num_decimals))
             doc_intensity.append(int(losses[i,1]))
 
-            
         MS_documents.append(doc)
         MS_documents_intensity.append(doc_intensity)
          
