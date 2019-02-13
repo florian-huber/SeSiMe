@@ -335,11 +335,20 @@ class SimilarityMeasures():
 ##
 ## -------------------- Calculate vectors -------------------------------------
 ## 
-    def get_vectors_centroid(self, weighted=True):
+    def get_vectors_centroid(self, extra_weights = None, tfidf_weighted=True):
         """ Calculate centroid vectors for all documents
         
         Individual word vectors are weighted using tfidf (unless weighted=False).
+        
+        Args:
+        --------
+        extra_weights: list
+            List of extra weights for add documents (and every word). Set to "None" if not used.
+        tfidf_weighted: bool
+            True, False
         """
+        
+        #TODO: include extra weights!
         
         # Check if everything is there:
         if self.model_word2vec is None:
@@ -357,7 +366,7 @@ class SimilarityMeasures():
             document = [self.dictionary[x[0]] for x in self.bow_corpus[i]]
             if len(document) > 0:
                 term1 = self.model_word2vec.wv[document]
-                if weighted:
+                if tfidf_weighted:
                     term2 = np.array(list(zip(*self.tfidf[self.bow_corpus[i]]))[1])
                 else:
                     term2 = np.ones((len(document)))

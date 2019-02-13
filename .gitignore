@@ -4,4 +4,5 @@
 *.csv
 output/
 data/
+models_trained/
 __pycache__/
