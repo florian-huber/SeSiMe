@@ -37,6 +37,7 @@ class BGC(object):
         feature_types =[] 
         bgc_knownclusters = [] 
         genes = []
+        bgc_info = {}
          
         # Go through all features and look for the most relevant ones
         for i, feature in enumerate(bgc_record.features):
@@ -49,7 +50,7 @@ class BGC(object):
                     bgc_info["BGC type probability"] = bgc_record.features[i].qualifiers["probability"][0]
                 else:
                     bgc_info["BGC type probability"] = 0
-                
+               
             if "knownclusterblast" in bgc_record.features[i].qualifiers:    
                 for m in range(0,len(bgc_record.features[i].qualifiers["knownclusterblast"])):
                         
@@ -63,7 +64,10 @@ class BGC(object):
                 location = bgc_record.features[i].location
                 features = []
                 features.append(bgc_record.features[i].qualifiers["locus_tag"][0])
-                features.append([location.nofuzzy_start, location.nofuzzy_end, location._strand],)
+                if "location" in bgc_record.features[i].qualifiers:
+                    features.append([location.nofuzzy_start, location.nofuzzy_end, location._strand],)
+                else:
+                    features.append([])
                 if "note" in bgc_record.features[i].qualifiers: 
                     features.append(bgc_record.features[i].qualifiers["note"][0])
                 else:
@@ -86,6 +90,10 @@ class BGC(object):
                                        float(feature.qualifiers["note"][1][27:])])
         
         self.id = id
+        if "BGC type" not in bgc_info:
+            bgc_info["BGC type"] = "unkown"
+            bgc_info["BGC type probability"] = "unkown"
+            print("Missing feature: bgc type." )
         self.bgc_type = (bgc_info["BGC type"], bgc_info["BGC type probability"])
         self.pfam_domains = PFAM_domains
         self.pfam_domain_data = PFAM_domain_data
@@ -102,6 +110,7 @@ def load_BGC_data(path_bgc_data,
                   path_json, 
                   results_file = "BGC_collected_data.json", 
                   filefilter="*cluster001.gbk",
+                  remove_for_small_files = 0,
                   entry = "single"):
     """ Extract values from antiSMAH .gbk files of byosynthetic gene clusters
     
@@ -111,10 +120,18 @@ def load_BGC_data(path_bgc_data,
     BGCs_dict = {}
     BGC_documents = []
 
-    dirs = os.listdir(path_bgc_data)
-    dirs_filtered = [x for x in fnmatch.filter(dirs, filename_include) if filename_exclude not in x]
-    strains = fnmatch.filter(dirs_filtered, filefilter)
+#    dirs = os.listdir(path_bgc_data)
+#    dirs_filtered = [x for x in fnmatch.filter(dirs, filename_include) if filename_exclude not in x]
+#    strains = fnmatch.filter(dirs_filtered, filefilter)
     
+    strains = []
+    list_of_files = []
+    for (dirpath, dirnames, filenames) in os.walk(path_bgc_data):
+        if len(filenames) > 0:
+            list_of_files.append(filenames[0])
+        if (len(filenames) > 0) & (len(fnmatch.filter(filenames, filefilter)) > 0):
+            strains.append((dirpath, filenames[0]))
+
     if results_file is not None:
         try: 
             BGCs_dict = functions.json_to_dict(path_json + results_file)
@@ -130,7 +147,6 @@ def load_BGC_data(path_bgc_data,
             print("Could not find file ", path_json,  results_file) 
             collect_new_data = True
 
-
     # Read data from files if no pre-stored data is found:
     if BGCs_dict == {} or results_file is None: 
         collect_new_data = True
@@ -138,15 +154,19 @@ def load_BGC_data(path_bgc_data,
 
         # Run over all strains:
         strainnumber = 0
-        for bgc_filename in strains:
-            bgc_filename_pattern = bgc_filename[0:-7] + "*"
+        for bgc_path, bgc_filename in strains:
+            if remove_for_small_files > 0:
+                bgc_filename_pattern = bgc_filename[0:-remove_for_small_files] + "*"
+            else: 
+                bgc_filename_pattern = bgc_filename
             strainnumber += 1
         
             print("collecting data from ...", bgc_filename_pattern)
             
             # Go through all clusters in one strain:
-            for bgc_filename in [x for x in fnmatch.filter(dirs, bgc_filename_pattern) if filename_exclude not in x]:     
-                bgc_file = path_bgc_data + bgc_filename
+#            for bgc_filename in [x for x in fnmatch.filter(dirs, bgc_filename_pattern) if filename_exclude not in x]:     
+            for bgc_filename in [x for x in fnmatch.filter(list_of_files, bgc_filename_pattern) if filename_exclude not in x]:    
+                bgc_file = os.path.join(bgc_path, bgc_filename)
                 
                 if entry == "multiple":
                     bgc_records = list(SeqIO.parse(bgc_file, "genbank"))
