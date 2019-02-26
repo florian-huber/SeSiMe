@@ -140,6 +140,39 @@ class Spectrum(object):
         
         self.peaks = peaks
 
+    def read_spectrum_mgf(self, spectrum_mgf, id):
+        """ Translate to THIS spectrum object given that we have a metabolomics.py spectrum object
+        """
+        self.id = id
+#        self.filename = doc_name
+        
+        if spectrum_mgf.parent_mz is not None:
+            self.parent_mz = spectrum_mgf.parent_mz
+        elif 'parentmass' in spectrum_mgf.metadata:
+            self.parent_mz = float(spectrum_mgf.metadata['parentmass'])
+        elif spectrum_mgf.precursor_mz is not None:
+            self.parent_mz = spectrum_mgf.precursor_mz
+        else:
+            print(id, spectrum_mgf.parent_mz) 
+        
+        if spectrum_mgf.metadata:
+            self.metadata = spectrum_mgf.metadata
+
+#        if 'parentmass' in spectrum_mgf.metadata:
+#            self.parent_mz = float(spectrum_mgf.metadata['parentmass'])
+#        elif '
+#        if spectrum_mgf.smiles:
+#            self.smiles = spectrum_mgf.smiles
+        if 'smiles' in spectrum_mgf.metadata:
+            self.smiles = spectrum_mgf.metadata['smiles']
+
+        peaks = spectrum_mgf.peaks
+        peaks = process_peaks(peaks, self.min_frag, self.max_frag,
+                              self.min_intensity_perc, self.exp_intensity_filter,
+                              self.min_peaks)
+        
+        self.peaks = peaks
+
 
     def get_losses(self):
         """ Use spectrum class and extract peaks and losses
@@ -375,64 +408,58 @@ def load_MGF_data(path_json,
                 
         except FileNotFoundError: 
             print("Could not find file ", path_json,  results_file) 
-            print("Data will be impted from ", results_file)
+            print("Data will be imported from ", results_file)
 
     # Read data from files if no pre-stored data is found:
     if spectra_dict == {} or results_file is None:
 
         # Load mgf file
-        spectra = load_spectra(mgf_file)
+        spectra_mgf = load_spectra(mgf_file)
         # Load metadata
         ms1, ms2, metadata = LoadMGF(name_field='scans').load_spectra([mgf_file])
 
-        for spec in spectra:
-            id = spec.spectrum_id
-            spec.metadata = metadata[id]
 
-        min_peak_absolute = min_peaks
+        # Make conform with spectrum class as defined in MS_functions.py
+        #--------------------------------------------------------------------
         
         # Scale the min_peak filter
         def min_peak_scaling(x, A, B):
             return int(A + B * x)
         
-        for spec in spectra:
-            peaks = spec.peaks.copy()
-            
+        for spec in spectra_mgf:
             # Scale the min_peak filter
-            min_peaks = min_peak_scaling(spec.precursor_mz, min_peak_absolute, peaks_per_mz)
+            min_peaks_scaled = min_peak_scaling(spec.precursor_mz, min_peaks, peaks_per_mz)
             
-            if len(peaks) > min_peaks:
-                peaks = process_peaks(peaks, 
-                                       min_frag = min_frag, 
-                                       max_frag = max_frag,
-                                       min_intensity_perc = 0.0,
-                                       exp_intensity_filter = exp_intensity_filter,
-                                       min_peaks = min_peaks)
-            spec.peaks = peaks
+            spectrum = Spectrum(min_frag = min_frag, 
+                                max_frag = max_frag,
+                                min_loss = min_loss, 
+                                max_loss = max_loss,
+                                min_intensity_perc = 0,
+                                exp_intensity_filter = exp_intensity_filter,
+                                min_peaks = min_peaks_scaled)
             
+            id = spec.spectrum_id
+            spectrum.read_spectrum_mgf(spec, id)
+            spectrum.get_losses
+
+            # Calculate losses:
+            spectrum.get_losses()
+            
+            # Collect in form of list of spectrum objects
+            spectra.append(spectrum)
+
             
         # filter out spectra with few peaks
-        min_peaks_absolute = 10
-        num_peaks_initial = len(spectra)
+        min_peaks_absolute =  min_peaks
+        num_spectra_initial = len(spectra)
         spectra = [copy.deepcopy(x) for x in spectra if len(x.peaks)>=min_peaks_absolute]
-        print("Take ", len(spectra), "peaks out of ", num_peaks_initial, ".")
+        print("Take ", len(spectra), "spectra out of ", num_spectra_initial, ".")
 
 
-        # Transfer object to dictionary
-        spectra_dict = {}
+        # Collect dictionary
         for spec in spectra:
-            spectra_dict[spec.spectrum_id] = spec.__dict__
-            spectra_dict[spec.spectrum_id]["smiles"] = spec.metadata["smiles"]
-                    
-        #            # Calculate losses
-        #            losses = np.array(peaks.copy())
-        #            losses[:,0] = spec.precursor_mz - losses[:,0]
-        #            
-        #            keep_idx = np.where((losses[:,0] > min_loss) & (losses[:,0] < max_loss))[0]                        
-        #            losses = losses[keep_idx,:]
-        #            
-        #            spec.losses = [(x[0], x[1]) for x in losses]
-        #            
+            id = spec.id
+            spectra_dict[id] = spec.__dict__
 
         # Create documents from peaks (and losses)
         MS_documents, MS_documents_intensity = create_MS_documents(spectra, num_decimals,
@@ -480,13 +507,17 @@ def create_MS_documents(spectra, num_decimals,
         doc = []
         doc_intensity = []
         losses = np.array(spectrum.losses)
-        keep_idx = np.where((losses[:,0] > min_loss) & (losses[:,0] < max_loss))[0]                        
-        losses = losses[keep_idx,:]
+        if len(losses) > 0: 
+            keep_idx = np.where((losses[:,0] > min_loss) & (losses[:,0] < max_loss))[0]
+            losses = losses[keep_idx,:]
+        else:
+            print("No losses detected for: ", i, spectrum.id)
         peaks = np.array(spectrum.peaks)
         
         # Sort peaks and losses by m/z 
         peaks = peaks[np.lexsort((peaks[:,1], peaks[:,0])),:]
-        losses = losses[np.lexsort((losses[:,1], losses[:,0])),:]
+        if len(losses) > 0: 
+            losses = losses[np.lexsort((losses[:,1], losses[:,0])),:]
 
         if (i+1) % 100 == 0 or i == len(spectra)-1:  # show progress
                 print('\r', ' Created documents for ', i+1, ' of ', len(spectra), ' spectra.', end="")
