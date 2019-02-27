@@ -151,7 +151,11 @@ class Spectrum(object):
         elif 'parentmass' in spectrum_mgf.metadata:
             self.parent_mz = float(spectrum_mgf.metadata['parentmass'])
         elif spectrum_mgf.precursor_mz is not None:
+            print("Only found precursor mass, not parent mass.")
             self.parent_mz = spectrum_mgf.precursor_mz
+        elif 'precursormass' in spectrum_mgf.metadata:
+            print("Only found precursor mass, not parent mass.")
+            self.parent_mz = float(spectrum_mgf.metadata['precursormass'])
         else:
             print(id, spectrum_mgf.parent_mz) 
         
@@ -418,6 +422,8 @@ def load_MGF_data(path_json,
         # Load metadata
         ms1, ms2, metadata = LoadMGF(name_field='scans').load_spectra([mgf_file])
 
+        for spec in spectra_mgf:
+            spec.metadata = metadata[spec.spectrum_id]
 
         # Make conform with spectrum class as defined in MS_functions.py
         #--------------------------------------------------------------------

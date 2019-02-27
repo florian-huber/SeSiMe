@@ -357,19 +357,28 @@ class SimilarityMeasures():
             print("BOW corpus has not been calculated yet (bow_corpus).")
         
         self.tfidf = models.TfidfModel(self.bow_corpus)
-        
+        vector_size = self.model_word2vec.wv.vector_size
         vectors_centroid = []
+        
         for i in range(len(self.bow_corpus)):
             if (i+1) % 10 == 0 or i == len(self.bow_corpus)-1:  # show progress
                 print('\r', ' Calculated centroid vectors for ', i+1, ' of ', len(self.bow_corpus), ' documents.', end="")
             
             document = [self.dictionary[x[0]] for x in self.bow_corpus[i]]
+            if extra_weights is not None:
+                document_weight = [extra_weights[i][self.initial_documents[i].index(self.dictionary[x[0]])] for x in self.bow_corpus[i]]
+                document_weight = np.array(document_weight)
+                document_weight = np.sqrt(document_weight/np.max(document_weight))  # idea: take sqrt to make huge intensity differences less severe
+            else:
+                document_weight = np.ones((len(document)))
             if len(document) > 0:
                 term1 = self.model_word2vec.wv[document]
                 if tfidf_weighted:
                     term2 = np.array(list(zip(*self.tfidf[self.bow_corpus[i]]))[1])
                 else:
                     term2 = np.ones((len(document)))
+                    
+                term1 = term1 * np.tile(document_weight, (vector_size,1)).T
                 weighted_docvector = np.sum((term1.T * term2).T, axis=0)
             else:
                 weighted_docvector = np.zeros((self.model_word2vec.vector_size))
