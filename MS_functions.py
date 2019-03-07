@@ -14,6 +14,8 @@ import copy
 import numpy as np
 from scipy.optimize import curve_fit
 
+from rdkit import DataStructs
+from rdkit.Chem.Fingerprints import FingerprintMols
 
 ## ----------------------------------------------------------------------------
 ## ---------------------------- Spectrum class --------------------------------
@@ -543,14 +545,173 @@ def create_MS_documents(spectra, num_decimals,
 
 
 
+def get_mol_similarity(spectra_dict):
+    """ Calculate molecule similarities based on given smiles.
+    (using RDkit)
+    """
+    # If spectra is given as a dictionary
+    keys = []
+    smiles = []
+    for key, value in spectra_dict.items():
+        if "smiles" in value:
+            keys.append(key) 
+            smiles.append(value["smiles"])
+        else:
+            print("No smiles found for spectra ", key, ".")
+            smiles.append("H20")  # just have some water when you get stuck
+   
+    molecules = [Chem.MolFromSmiles(x) for x in smiles]
+    fingerprints = []
+    for i in range(len(molecules)):
+        if molecules[i] is None:
+            print("Problem with molecule ", i)
+            fp = 0
+        else:
+            fp = FingerprintMols.FingerprintMol(molecules[i])
+
+        fingerprints.append(fp)
+                
+#    fingerprints = [FingerprintMols.FingerprintMol(x) for x in molecules]
+    
+    return molecules, fingerprints
+
+
+def compare_molecule_selection(query_id, spectra_dict, MS_measure, 
+                               fingerprints,
+                               num_candidates = 25, 
+                               dist_method = "centroid"):
+    """ Compare spectra-based similarity with smile-based similarity
+    """
+    
+    # Select chosen distance methods
+    if dist_method == "centroid":
+        candidates_idx = MS_measure.Cdistances_ctr_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.Cdistances_ctr[query_id, :num_candidates]
+    elif dist_method == "pca":
+        candidates_idx = MS_measure.Cdistances_pca_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.Cdistances_pca[query_id, :num_candidates]
+    elif dist_method == "autoencoder":
+        candidates_idx = MS_measure.Cdistances_ae_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.Cdistances_ae[query_id, :num_candidates]
+    elif dist_method == "lda":
+        candidates_idx = MS_measure.Cdistances_lda_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.Cdistances_lda[query_id, :num_candidates]
+    elif dist_method == "lsi":
+        candidates_idx = MS_measure.Cdistances_lsi_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.Cdistances_lsi[query_id, :num_candidates]
+    elif dist_method == "doc2vec":
+        candidates_idx = MS_measure.Cdistances_d2v_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.Cdistances_d2v[query_id, :num_candidates]
+    else:
+        print("Chosen distance measuring method not found.")
+        
+    mol_dist = np.zeros((len(fingerprints)))
+    if fingerprints[query_id] != 0:
+        for j in range(len(fingerprints)):
+            if fingerprints[j] != 0:     
+                mol_dist[j] = DataStructs.FingerprintSimilarity(fingerprints[query_id], fingerprints[j])
+                
+    smiles_distance = np.array([np.arange(0, len(mol_dist)),mol_dist]).T
+    smiles_distance = smiles_distance[np.lexsort((smiles_distance[:,0], -smiles_distance[:,1])),:]
+    
+    print("Selected candidates based on spectrum: ")
+    print(candidates_idx)
+    print("Selected candidates based on smiles: ")
+    print(smiles_distance[:num_candidates,0])
+#    print("Selected candidates based on spectrum: ")
+#    print(list(zip(candidates_idx, candidates_dist)))
+#    print("Selected candidates based on smiles: ")
+#    print(list(zip(smiles_distance[:num_candidates,0], smiles_distance[:num_candidates,1])))
+    print("Selected candidates based on spectrum: ")
+    for i in range(num_candidates):
+        print("id: "+ str(candidates_idx[i]) + " (distance: " +  str(candidates_dist[i]) + " | Tanimoto: " + str(mol_dist[candidates_idx[i]]) +")")
+
+        
+#        print(["id: "+ str(x[0]) + " (distance: " +  str(x[1]) + " | Tanimoto: " + str(mol_dist[x[0]]) +")" for x in zip(candidates_idx, candidates_dist)])
+
 
 ## ----------------------------------------------------------------------------
 ## ---------------------------- Plotting functions ----------------------------
 ## ----------------------------------------------------------------------------
+from matplotlib import pyplot as plt
+
+
+def get_spaced_colors_hex(n):
+    """ Create set of 'n' well-distinguishable colors
+    """
+    spaced_colors = ["FF0000", "00FF00", "0000FF", "FFFF00", "FF00FF", "00FFFF", "000000", 
+        "800000", "008000", "000080", "808000", "800080", "008080", "808080", 
+        "C00000", "00C000", "0000C0", "C0C000", "C000C0", "00C0C0", "C0C0C0", 
+        "400000", "004000", "000040", "404000", "400040", "004040", "404040", 
+        "200000", "002000", "000020", "202000", "200020", "002020", "202020", 
+        "600000", "006000", "000060", "606000", "600060", "006060", "606060", 
+        "A00000", "00A000", "0000A0", "A0A000", "A000A0", "00A0A0", "A0A0A0", 
+        "E00000", "00E000", "0000E0", "E0E000", "E000E0", "00E0E0", "E0E0E0"]
+    
+    RGB_colors = ["#"+x for x in spaced_colors[:n] ]
+    
+
+    return RGB_colors
+
+
+def plot_spectra(spectra, compare_ids, min_mz = 50, max_mz = 500):
+    """ Plot different spectra together to compare.
+    """
+    plt.figure(figsize=(10,10))
+
+    peak_number = []
+    RGB_colors = get_spaced_colors_hex(len(compare_ids))
+    for i, id in enumerate(compare_ids):
+        peaks = np.array(spectra[id].peaks.copy())
+        peak_number.append(len(peaks))
+        peaks[:,1] = peaks[:,1]/np.max(peaks[:,1]); 
+
+        markerline, stemlines, baseline = plt.stem(peaks[:,0], peaks[:,1], linefmt='-', markerfmt='.', basefmt='r-')
+        plt.setp(stemlines, 'color', RGB_colors[i])
+    
+    plt.xlim((min_mz, max_mz))
+    plt.grid(True)
+    plt.title('Spectrum')
+    plt.xlabel('m/z')
+    plt.ylabel('peak intensity')
+    
+    plt.show()
+    
+    print("Number of peaks: ", peak_number)
+
+
+def plot_losses(spectra, compare_ids, min_loss = 0, max_loss = 500):
+    """ Plot different spectra together to compare.
+    """
+    plt.figure(figsize=(10,10))
+
+    losses_number = []
+    RGB_colors = get_spaced_colors_hex(len(compare_ids)+5)
+    for i, id in enumerate(compare_ids):
+        losses = np.array(spectra[id].losses.copy())
+        losses_number.append(len(losses))
+        losses[:,1] = losses[:,1]/np.max(losses[:,1]); 
+
+        markerline, stemlines, baseline = plt.stem(losses[:,0], losses[:,1], linefmt='-', markerfmt='.', basefmt='r-')
+        plt.setp(stemlines, 'color', RGB_colors[i])
+    
+    plt.xlim((min_loss, max_loss))
+    plt.grid(True)
+    plt.title('Spectrum')
+    plt.xlabel('m/z')
+    plt.ylabel('peak intensity')
+    
+    plt.show()
+    
+    print("Number of peaks: ", losses_number)
+
+
+
+
+
 
 from rdkit import Chem
 from rdkit.Chem import Draw
-from matplotlib import pyplot as plt
 
 def plot_smiles(query_id, spectra, MS_measure, num_candidates = 10,
                    sharex=True, labels=False, dist_method = "centroid",
