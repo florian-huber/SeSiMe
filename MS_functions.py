@@ -13,6 +13,7 @@ import fnmatch
 import copy
 import numpy as np
 from scipy.optimize import curve_fit
+import random
 
 from rdkit import DataStructs
 from rdkit.Chem.Fingerprints import FingerprintMols
@@ -581,6 +582,21 @@ def compare_molecule_selection(query_id, spectra_dict, MS_measure,
                                num_candidates = 25, 
                                dist_method = "centroid"):
     """ Compare spectra-based similarity with smile-based similarity
+    
+    Args:
+    -------
+    query_id: int
+        Number of spectra to use as query.
+    spectra_dict: dict
+        Dictionary containing all spectra peaks, losses, metadata.
+    MS_measure: object
+        Similariy object containing the model and distance matrices.
+    fingerprints: object
+        Fingerprint objects for all molecules (if smiles exist for the spectra).
+    num_candidates: int
+        Number of candidates to list (default = 25) .
+    dist_method: str
+        Define method to use (default = "centroid").
     """
     
     # Select chosen distance methods
@@ -618,17 +634,83 @@ def compare_molecule_selection(query_id, spectra_dict, MS_measure,
     print(candidates_idx)
     print("Selected candidates based on smiles: ")
     print(smiles_distance[:num_candidates,0])
-#    print("Selected candidates based on spectrum: ")
-#    print(list(zip(candidates_idx, candidates_dist)))
-#    print("Selected candidates based on smiles: ")
-#    print(list(zip(smiles_distance[:num_candidates,0], smiles_distance[:num_candidates,1])))
     print("Selected candidates based on spectrum: ")
     for i in range(num_candidates):
         print("id: "+ str(candidates_idx[i]) + " (distance: " +  str(candidates_dist[i]) + " | Tanimoto: " + str(mol_dist[candidates_idx[i]]) +")")
 
-        
-#        print(["id: "+ str(x[0]) + " (distance: " +  str(x[1]) + " | Tanimoto: " + str(mol_dist[x[0]]) +")" for x in zip(candidates_idx, candidates_dist)])
 
+
+def evaluate_measure(spectra_dict, MS_measure, 
+                               fingerprints,
+                               num_candidates = 25,
+                               num_of_molecules = 100,
+                               dist_method = "centroid",
+                               reference_list = None):
+    """ Compare spectra-based similarity with smile-based similarity
+        
+    Args:
+    -------
+    spectra_dict: dict
+        Dictionary containing all spectra peaks, losses, metadata.
+    MS_measure: object
+        Similariy object containing the model and distance matrices.
+    fingerprints: object
+        Fingerprint objects for all molecules (if smiles exist for the spectra).
+    num_candidates: int
+        Number of candidates to list (default = 25) .
+    num_of_molecules: int
+        Number of molecules to test method on (default= 100)
+    dist_method: str
+        Define method to use (default = "centroid").
+    """
+    # Create reference list if not given as args:
+    if reference_list is None:
+#        reference_list = np.zeros((num_of_molecules))
+        reference_list = np.array(random.sample(list(np.arange(len(fingerprints))),k=num_of_molecules))
+        
+    mol_dist = np.zeros((num_of_molecules, num_candidates))
+    spec_dist = np.zeros((num_of_molecules, num_candidates))
+    rand_dist = np.zeros((num_of_molecules, num_candidates))
+    
+    for i, query_id in enumerate(reference_list):
+        
+        # Select chosen distance methods
+        if dist_method == "centroid":
+            candidates_idx = MS_measure.Cdistances_ctr_idx[query_id, :num_candidates]
+            candidates_dist = MS_measure.Cdistances_ctr[query_id, :num_candidates]
+        elif dist_method == "pca":
+            candidates_idx = MS_measure.Cdistances_pca_idx[query_id, :num_candidates]
+            candidates_dist = MS_measure.Cdistances_pca[query_id, :num_candidates]
+        elif dist_method == "autoencoder":
+            candidates_idx = MS_measure.Cdistances_ae_idx[query_id, :num_candidates]
+            candidates_dist = MS_measure.Cdistances_ae[query_id, :num_candidates]
+        elif dist_method == "lda":
+            candidates_idx = MS_measure.Cdistances_lda_idx[query_id, :num_candidates]
+            candidates_dist = MS_measure.Cdistances_lda[query_id, :num_candidates]
+        elif dist_method == "lsi":
+            candidates_idx = MS_measure.Cdistances_lsi_idx[query_id, :num_candidates]
+            candidates_dist = MS_measure.Cdistances_lsi[query_id, :num_candidates]
+        elif dist_method == "doc2vec":
+            candidates_idx = MS_measure.Cdistances_d2v_idx[query_id, :num_candidates]
+            candidates_dist = MS_measure.Cdistances_d2v[query_id, :num_candidates]
+        else:
+            print("Chosen distance measuring method not found.")
+
+        # Calculate Tanimoto similarity for selected candidates
+        if fingerprints[query_id] != 0:
+            for j, cand_id in enumerate(candidates_idx): 
+                if fingerprints[cand_id] != 0:     
+                    mol_dist[i, j] = DataStructs.FingerprintSimilarity(fingerprints[query_id], fingerprints[cand_id])
+                    
+        spec_dist[i,:] = candidates_dist
+        
+        rand_idx = np.array(random.sample(list(np.arange(len(fingerprints))),k=num_candidates))
+        if fingerprints[query_id] != 0:
+            for j, cand_id in enumerate(rand_idx): 
+                if fingerprints[cand_id] != 0:  
+                    rand_dist[i,j] = DataStructs.FingerprintSimilarity(fingerprints[query_id], fingerprints[cand_id])
+
+    return mol_dist, spec_dist, rand_dist, reference_list
 
 ## ----------------------------------------------------------------------------
 ## ---------------------------- Plotting functions ----------------------------

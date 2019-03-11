@@ -83,7 +83,7 @@ class SimilarityMeasures():
         self.Cdistances_d2v_idx = None
 
 
-    def preprocess_documents(self, max_fraction, create_stopwords = False):
+    def preprocess_documents(self, max_fraction, remove_stopwords = None, create_stopwords = False):
         """ Preprocess 'documents'
         
         Obvious steps: 
@@ -101,8 +101,12 @@ class SimilarityMeasures():
         
         # Preprocess documents (all lower letters, every word exists at least 2 times)
         print("Preprocess documents...")
-        self.corpus, frequency = functions.preprocess_document(self.initial_documents, 
+        if remove_stopwords is None:
+            self.corpus, frequency = functions.preprocess_document(self.initial_documents, 
                                                                        stopwords = [], min_frequency = 2)
+        else:
+            self.corpus, frequency = functions.preprocess_document(self.initial_documents, 
+                                                                       stopwords = remove_stopwords, min_frequency = 2)    
         
         # Create dictionary (or "vocabulary") containting all unique words from documents
         self.dictionary = corpora.Dictionary(self.corpus)
@@ -368,7 +372,11 @@ class SimilarityMeasures():
             if extra_weights is not None:
                 document_weight = [extra_weights[i][self.initial_documents[i].index(self.dictionary[x[0]])] for x in self.bow_corpus[i]]
                 document_weight = np.array(document_weight)
-                document_weight = np.sqrt(document_weight/np.max(document_weight))  # idea: take sqrt to make huge intensity differences less severe
+                if len(document_weight) == 0:
+                    print("Something might have gone wrong with: ", i)
+                    np.ones((len(document)))
+                else:
+                    document_weight = np.sqrt(document_weight/np.max(document_weight))  # idea: take sqrt to make huge intensity differences less severe
             else:
                 document_weight = np.ones((len(document)))
             if len(document) > 0:
