@@ -431,11 +431,12 @@ class SimilarityMeasures():
             See scipy spatial.distance.cdist for options. Default is 'cosine'.
         
         """
-        Cdistances_idx, Cdistances = functions.calculate_distances(self.vectors_centroid, 
+        Cdistances_idx, Cdistances, mean_distance = functions.calculate_distances(self.vectors_centroid, 
                                                                    num_hits, method = method)
         print("Calculated distances between ", Cdistances.shape[0], " documents.")
         self.Cdistances_ctr_idx = Cdistances_idx
         self.Cdistances_ctr = Cdistances
+        self.mean_distance_ctr = mean_distance
 
 
 
@@ -452,11 +453,12 @@ class SimilarityMeasures():
         """
         self.vectors_ae = self.encoder.predict(self.X_data)
         
-        Cdistances_ae_idx, Cdistances_ae = functions.calculate_distances(self.vectors_ae, 
+        Cdistances_ae_idx, Cdistances_ae, mean_distance = functions.calculate_distances(self.vectors_ae, 
                                                                    num_hits, method = method)
         
         self.Cdistances_ae_idx = Cdistances_ae_idx
         self.Cdistances_ae = Cdistances_ae
+        self.mean_distance_ae = mean_distance
 
 
     def get_pca_distances(self, num_hits=25, method='cosine'):
@@ -470,11 +472,12 @@ class SimilarityMeasures():
             See scipy spatial.distance.cdist for options. Default is 'cosine'.
         
         """
-        Cdistances_idx, Cdistances = functions.calculate_distances(self.vectors_pca, 
+        Cdistances_idx, Cdistances, mean_distance = functions.calculate_distances(self.vectors_pca, 
                                                                    num_hits, method = method)
         
         self.Cdistances_pca_idx = Cdistances_idx
         self.Cdistances_pca = Cdistances
+        self.mean_distance_pca = mean_distance
         
         
     def get_lda_distances(self, num_hits=25):

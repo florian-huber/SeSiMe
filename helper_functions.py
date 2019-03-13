@@ -157,7 +157,7 @@ def calculate_distances(vectors, num_hits=25, method='cosine'):
     
     """
     Cdist = spatial.distance.cdist(vectors, vectors, method)
-    
+    mean_distance = np.mean(Cdist)
     # Create numpy arrays to store distances
     Cdistances_ids = np.zeros((Cdist.shape[0],num_hits), dtype=int)
     Cdistances = np.zeros((Cdist.shape[0],num_hits))
@@ -166,7 +166,7 @@ def calculate_distances(vectors, num_hits=25, method='cosine'):
         Cdistances_ids[i,:] = Cdist[i,:].argsort()[:num_hits]
         Cdistances[i,:] = Cdist[i, Cdistances_ids[i,:]]
     
-    return Cdistances_ids, Cdistances
+    return Cdistances_ids, Cdistances, mean_distance
 
 
 

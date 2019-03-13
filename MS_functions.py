@@ -571,9 +571,16 @@ def create_MS_documents(spectra, num_decimals,
 
 
 
-def get_mol_similarity(spectra_dict):
+def get_mol_similarity(spectra_dict, method = ""):
     """ Calculate molecule similarities based on given smiles.
     (using RDkit)
+    
+    Args:
+    --------
+    spectra_dict: dict
+        Dictionary containing all spectrum objects information (peaks, losses, metadata...).
+    method: str
+        
     """
     # If spectra is given as a dictionary
     keys = []
@@ -668,7 +675,7 @@ def compare_molecule_selection(query_id, spectra_dict, MS_measure,
 def evaluate_measure(spectra_dict, MS_measure, 
                                fingerprints,
                                num_candidates = 25,
-                               num_of_molecules = 100,
+                               num_of_molecules = "all", 
                                dist_method = "centroid",
                                reference_list = None):
     """ Compare spectra-based similarity with smile-based similarity
@@ -690,12 +697,16 @@ def evaluate_measure(spectra_dict, MS_measure,
     """
     # Create reference list if not given as args:
     if reference_list is None:
-#        reference_list = np.zeros((num_of_molecules))
-        reference_list = np.array(random.sample(list(np.arange(len(fingerprints))),k=num_of_molecules))
+        if num_of_molecules == "all":
+            reference_list = np.arange(len(MS_measure.corpus))
+        elif isinstance(num_of_molecules, int): 
+            reference_list = np.array(random.sample(list(np.arange(len(fingerprints))),k=num_of_molecules))
+        else:
+            print("num_of_molecules needs to be integer or 'all'.")
         
-    mol_dist = np.zeros((num_of_molecules, num_candidates))
-    spec_dist = np.zeros((num_of_molecules, num_candidates))
-    rand_dist = np.zeros((num_of_molecules, num_candidates))
+    mol_dist = np.zeros((len(reference_list), num_candidates))
+    spec_dist = np.zeros((len(reference_list), num_candidates))
+    rand_dist = np.zeros((len(reference_list), num_candidates))
     
     for i, query_id in enumerate(reference_list):
         
