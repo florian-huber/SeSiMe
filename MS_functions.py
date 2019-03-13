@@ -612,7 +612,7 @@ def get_mol_similarity(spectra_dict, method = ""):
 def compare_molecule_selection(query_id, spectra_dict, MS_measure, 
                                fingerprints,
                                num_candidates = 25, 
-                               dist_method = "centroid"):
+                               similarity_method = "centroid"):
     """ Compare spectra-based similarity with smile-based similarity
     
     Args:
@@ -627,48 +627,48 @@ def compare_molecule_selection(query_id, spectra_dict, MS_measure,
         Fingerprint objects for all molecules (if smiles exist for the spectra).
     num_candidates: int
         Number of candidates to list (default = 25) .
-    dist_method: str
+    similarity_method: str
         Define method to use (default = "centroid").
     """
     
-    # Select chosen distance methods
-    if dist_method == "centroid":
-        candidates_idx = MS_measure.Cdistances_ctr_idx[query_id, :num_candidates]
-        candidates_dist = MS_measure.Cdistances_ctr[query_id, :num_candidates]
-    elif dist_method == "pca":
-        candidates_idx = MS_measure.Cdistances_pca_idx[query_id, :num_candidates]
-        candidates_dist = MS_measure.Cdistances_pca[query_id, :num_candidates]
-    elif dist_method == "autoencoder":
-        candidates_idx = MS_measure.Cdistances_ae_idx[query_id, :num_candidates]
-        candidates_dist = MS_measure.Cdistances_ae[query_id, :num_candidates]
-    elif dist_method == "lda":
-        candidates_idx = MS_measure.Cdistances_lda_idx[query_id, :num_candidates]
-        candidates_dist = MS_measure.Cdistances_lda[query_id, :num_candidates]
-    elif dist_method == "lsi":
-        candidates_idx = MS_measure.Cdistances_lsi_idx[query_id, :num_candidates]
-        candidates_dist = MS_measure.Cdistances_lsi[query_id, :num_candidates]
-    elif dist_method == "doc2vec":
-        candidates_idx = MS_measure.Cdistances_d2v_idx[query_id, :num_candidates]
-        candidates_dist = MS_measure.Cdistances_d2v[query_id, :num_candidates]
+    # Select chosen similarity methods
+    if similarity_method == "centroid":
+        candidates_idx = MS_measure.list_similars_ctr_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.list_similars_ctr[query_id, :num_candidates]
+    elif similarity_method == "pca":
+        candidates_idx = MS_measure.list_similars_pca_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.list_similars_pca[query_id, :num_candidates]
+    elif similarity_method == "autoencoder":
+        candidates_idx = MS_measure.list_similars_ae_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.list_similars_ae[query_id, :num_candidates]
+    elif similarity_method == "lda":
+        candidates_idx = MS_measure.list_similars_lda_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.list_similars_lda[query_id, :num_candidates]
+    elif similarity_method == "lsi":
+        candidates_idx = MS_measure.list_similars_lsi_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.list_similars_lsi[query_id, :num_candidates]
+    elif similarity_method == "doc2vec":
+        candidates_idx = MS_measure.list_similars_d2v_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.list_similars_d2v[query_id, :num_candidates]
     else:
-        print("Chosen distance measuring method not found.")
+        print("Chosen similarity measuring method not found.")
         
-    mol_dist = np.zeros((len(fingerprints)))
+    mol_sim = np.zeros((len(fingerprints)))
     if fingerprints[query_id] != 0:
         for j in range(len(fingerprints)):
             if fingerprints[j] != 0:     
-                mol_dist[j] = DataStructs.FingerprintSimilarity(fingerprints[query_id], fingerprints[j])
+                mol_sim[j] = DataStructs.FingerprintSimilarity(fingerprints[query_id], fingerprints[j])
                 
-    smiles_distance = np.array([np.arange(0, len(mol_dist)),mol_dist]).T
-    smiles_distance = smiles_distance[np.lexsort((smiles_distance[:,0], -smiles_distance[:,1])),:]
+    smiles_similarity = np.array([np.arange(0, len(mol_sim)), mol_sim]).T
+    smiles_similarity = smiles_similarity[np.lexsort((smiles_similarity[:,0], smiles_similarity[:,1])),:]
     
     print("Selected candidates based on spectrum: ")
     print(candidates_idx)
     print("Selected candidates based on smiles: ")
-    print(smiles_distance[:num_candidates,0])
+    print(smiles_similarity[:num_candidates,0])
     print("Selected candidates based on spectrum: ")
     for i in range(num_candidates):
-        print("id: "+ str(candidates_idx[i]) + " (distance: " +  str(candidates_dist[i]) + " | Tanimoto: " + str(mol_dist[candidates_idx[i]]) +")")
+        print("id: "+ str(candidates_idx[i]) + " (similarity: " +  str(candidates_dist[i]) + " | Tanimoto: " + str(mol_sim[candidates_idx[i]]) +")")
 
 
 
@@ -676,7 +676,7 @@ def evaluate_measure(spectra_dict, MS_measure,
                                fingerprints,
                                num_candidates = 25,
                                num_of_molecules = "all", 
-                               dist_method = "centroid",
+                               similarity_method = "centroid",
                                reference_list = None):
     """ Compare spectra-based similarity with smile-based similarity
         
@@ -692,7 +692,7 @@ def evaluate_measure(spectra_dict, MS_measure,
         Number of candidates to list (default = 25) .
     num_of_molecules: int
         Number of molecules to test method on (default= 100)
-    dist_method: str
+    similarity_method: str
         Define method to use (default = "centroid").
     """
     # Create reference list if not given as args:
@@ -710,27 +710,27 @@ def evaluate_measure(spectra_dict, MS_measure,
     
     for i, query_id in enumerate(reference_list):
         
-        # Select chosen distance methods
-        if dist_method == "centroid":
-            candidates_idx = MS_measure.Cdistances_ctr_idx[query_id, :num_candidates]
-            candidates_dist = MS_measure.Cdistances_ctr[query_id, :num_candidates]
-        elif dist_method == "pca":
-            candidates_idx = MS_measure.Cdistances_pca_idx[query_id, :num_candidates]
-            candidates_dist = MS_measure.Cdistances_pca[query_id, :num_candidates]
-        elif dist_method == "autoencoder":
-            candidates_idx = MS_measure.Cdistances_ae_idx[query_id, :num_candidates]
-            candidates_dist = MS_measure.Cdistances_ae[query_id, :num_candidates]
-        elif dist_method == "lda":
-            candidates_idx = MS_measure.Cdistances_lda_idx[query_id, :num_candidates]
-            candidates_dist = MS_measure.Cdistances_lda[query_id, :num_candidates]
-        elif dist_method == "lsi":
-            candidates_idx = MS_measure.Cdistances_lsi_idx[query_id, :num_candidates]
-            candidates_dist = MS_measure.Cdistances_lsi[query_id, :num_candidates]
-        elif dist_method == "doc2vec":
-            candidates_idx = MS_measure.Cdistances_d2v_idx[query_id, :num_candidates]
-            candidates_dist = MS_measure.Cdistances_d2v[query_id, :num_candidates]
+        # Select chosen similarity methods
+        if similarity_method == "centroid":
+            candidates_idx = MS_measure.list_similars_ctr_idx[query_id, :num_candidates]
+            candidates_dist = MS_measure.list_similars_ctr[query_id, :num_candidates]
+        elif similarity_method == "pca":
+            candidates_idx = MS_measure.list_similars_pca_idx[query_id, :num_candidates]
+            candidates_dist = MS_measure.list_similars_pca[query_id, :num_candidates]
+        elif similarity_method == "autoencoder":
+            candidates_idx = MS_measure.list_similars_ae_idx[query_id, :num_candidates]
+            candidates_dist = MS_measure.list_similars_ae[query_id, :num_candidates]
+        elif similarity_method == "lda":
+            candidates_idx = MS_measure.list_similars_lda_idx[query_id, :num_candidates]
+            candidates_dist = MS_measure.list_similars_lda[query_id, :num_candidates]
+        elif similarity_method == "lsi":
+            candidates_idx = MS_measure.list_similars_lsi_idx[query_id, :num_candidates]
+            candidates_dist = MS_measure.list_similars_lsi[query_id, :num_candidates]
+        elif similarity_method == "doc2vec":
+            candidates_idx = MS_measure.list_similars_d2v_idx[query_id, :num_candidates]
+            candidates_dist = MS_measure.list_similars_d2v[query_id, :num_candidates]
         else:
-            print("Chosen distance measuring method not found.")
+            print("Chosen similarity measuring method not found.")
 
         # Calculate Tanimoto similarity for selected candidates
         if fingerprints[query_id] != 0:
@@ -832,33 +832,33 @@ from rdkit import Chem
 from rdkit.Chem import Draw
 
 def plot_smiles(query_id, spectra, MS_measure, num_candidates = 10,
-                   sharex=True, labels=False, dist_method = "centroid",
+                   sharex=True, labels=False, similarity_method = "centroid",
                    plot_type = "single"):
     """ Plot molecules for closest candidates
     
     """
 
-    # Select chosen distance methods
-    if dist_method == "centroid":
-        candidates_idx = MS_measure.Cdistances_ctr_idx[query_id, :num_candidates]
-        candidates_dist = MS_measure.Cdistances_ctr[query_id, :num_candidates]
-    elif dist_method == "pca":
-        candidates_idx = MS_measure.Cdistances_pca_idx[query_id, :num_candidates]
-        candidates_dist = MS_measure.Cdistances_pca[query_id, :num_candidates]
-    elif dist_method == "autoencoder":
-        candidates_idx = MS_measure.Cdistances_ae_idx[query_id, :num_candidates]
-        candidates_dist = MS_measure.Cdistances_ae[query_id, :num_candidates]
-    elif dist_method == "lda":
-        candidates_idx = MS_measure.Cdistances_lda_idx[query_id, :num_candidates]
-        candidates_dist = MS_measure.Cdistances_lda[query_id, :num_candidates]
-    elif dist_method == "lsi":
-        candidates_idx = MS_measure.Cdistances_lsi_idx[query_id, :num_candidates]
-        candidates_dist = MS_measure.Cdistances_lsi[query_id, :num_candidates]
-    elif dist_method == "doc2vec":
-        candidates_idx = MS_measure.Cdistances_d2v_idx[query_id, :num_candidates]
-        candidates_dist = MS_measure.Cdistances_d2v[query_id, :num_candidates]
+    # Select chosen similarity methods
+    if similarity_method == "centroid":
+        candidates_idx = MS_measure.list_similars_ctr_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.list_similars_ctr[query_id, :num_candidates]
+    elif similarity_method == "pca":
+        candidates_idx = MS_measure.list_similars_pca_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.list_similars_pca[query_id, :num_candidates]
+    elif similarity_method == "autoencoder":
+        candidates_idx = MS_measure.list_similars_ae_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.list_similars_ae[query_id, :num_candidates]
+    elif similarity_method == "lda":
+        candidates_idx = MS_measure.list_similars_lda_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.list_similars_lda[query_id, :num_candidates]
+    elif similarity_method == "lsi":
+        candidates_idx = MS_measure.list_similars_lsi_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.list_similars_lsi[query_id, :num_candidates]
+    elif similarity_method == "doc2vec":
+        candidates_idx = MS_measure.list_similars_d2v_idx[query_id, :num_candidates]
+        candidates_dist = MS_measure.list_similars_d2v[query_id, :num_candidates]
     else:
-        print("Chosen distance measuring method not found.")
+        print("Chosen similarity measuring method not found.")
 
     size = (200, 200)  # Smaller figures than the default
 

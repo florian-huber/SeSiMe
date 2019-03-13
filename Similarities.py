@@ -37,7 +37,7 @@ class SimilarityMeasures():
     Documents lists of words.
     
     Similarity measuring methods:
-    1) Low-dimensional document vector distance (e.g. cosine distance)
+    1) Low-dimensional document vector similarity (e.g. cosine similarity)
         a) Word2Vec based centroid vector (tfidf weighted or not weighted)
         b) Doc2Vec
         c) PCA
@@ -68,19 +68,19 @@ class SimilarityMeasures():
         self.vectors_ae = []
         self.vectors_pca = []
         
-        # Listed distances
-        self.Cdistances_ctr = None
-        self.Cdistances_ctr_idx = None
-        self.Cdistances_ae = None
-        self.Cdistances_ae_idx = None
-        self.Cdistances_pca = None
-        self.Cdistances_pca_idx = None
-        self.Cdistances_lda = None
-        self.Cdistances_lda_idx = None
-        self.Cdistances_lsi = None
-        self.Cdistances_lsi_idx = None
-        self.Cdistances_d2v = None
-        self.Cdistances_d2v_idx = None
+        # Listed similarities
+        self.list_similars_ctr = None
+        self.list_similars_ctr_idx = None
+        self.list_similars_ae = None
+        self.list_similars_ae_idx = None
+        self.list_similars_pca = None
+        self.list_similars_pca_idx = None
+        self.list_similars_lda = None
+        self.list_similars_lda_idx = None
+        self.list_similars_lsi = None
+        self.list_similars_lsi_idx = None
+        self.list_similars_d2v = None
+        self.list_similars_d2v_idx = None
 
 
     def preprocess_documents(self, max_fraction, remove_stopwords = None, create_stopwords = False):
@@ -418,10 +418,10 @@ class SimilarityMeasures():
         
 
 ##
-## -------------------- Calculate distances -----------------------------------
+## -------------------- Calculate similarities -----------------------------------
 ## 
-    def get_centroid_distances(self, num_hits=25, method='cosine'):
-        """ Calculate centroid distances(all-versus-all --> matrix)
+    def get_centroid_similarity(self, num_hits=25, method='cosine'):
+        """ Calculate centroid similarities(all-versus-all --> matrix)
         
         Args:
         -------
@@ -431,17 +431,17 @@ class SimilarityMeasures():
             See scipy spatial.distance.cdist for options. Default is 'cosine'.
         
         """
-        Cdistances_idx, Cdistances, mean_distance = functions.calculate_distances(self.vectors_centroid, 
+        list_similars_idx, list_similars, mean_similarity = functions.calculate_similarities(self.vectors_centroid, 
                                                                    num_hits, method = method)
-        print("Calculated distances between ", Cdistances.shape[0], " documents.")
-        self.Cdistances_ctr_idx = Cdistances_idx
-        self.Cdistances_ctr = Cdistances
-        self.mean_distance_ctr = mean_distance
+        print("Calculated distances between ", list_similars.shape[0], " documents.")
+        self.list_similars_ctr_idx = list_similars_idx
+        self.list_similars_ctr = list_similars
+        self.mean_similarity_ctr = mean_similarity
 
 
 
-    def get_autoencoder_distances(self, num_hits=25, method='cosine'):
-        """ Calculate autoencoder distances(all-versus-all --> matrix)
+    def get_autoencoder_similarity(self, num_hits=25, method='cosine'):
+        """ Calculate autoencoder similarities(all-versus-all --> matrix)
         
         Args:
         -------
@@ -453,16 +453,16 @@ class SimilarityMeasures():
         """
         self.vectors_ae = self.encoder.predict(self.X_data)
         
-        Cdistances_ae_idx, Cdistances_ae, mean_distance = functions.calculate_distances(self.vectors_ae, 
+        list_similars_ae_idx, list_similars_ae, mean_similarity = functions.calculate_similarities(self.vectors_ae, 
                                                                    num_hits, method = method)
         
-        self.Cdistances_ae_idx = Cdistances_ae_idx
-        self.Cdistances_ae = Cdistances_ae
-        self.mean_distance_ae = mean_distance
+        self.list_similars_ae_idx = list_similars_ae_idx
+        self.list_similars_ae = list_similars_ae
+        self.mean_similarity_ae = mean_similarity
 
 
-    def get_pca_distances(self, num_hits=25, method='cosine'):
-        """ Calculate PCA distances(all-versus-all --> matrix)
+    def get_pca_similarity(self, num_hits=25, method='cosine'):
+        """ Calculate PCA similarities(all-versus-all --> matrix)
         
         Args:
         -------
@@ -472,48 +472,16 @@ class SimilarityMeasures():
             See scipy spatial.distance.cdist for options. Default is 'cosine'.
         
         """
-        Cdistances_idx, Cdistances, mean_distance = functions.calculate_distances(self.vectors_pca, 
+        list_similars_idx, list_similars, mean_similarity = functions.calculate_similarities(self.vectors_pca, 
                                                                    num_hits, method = method)
         
-        self.Cdistances_pca_idx = Cdistances_idx
-        self.Cdistances_pca = Cdistances
-        self.mean_distance_pca = mean_distance
+        self.list_similars_pca_idx = list_similars_idx
+        self.list_similars_pca = list_similars
+        self.mean_similarity_pca = mean_similarity
         
         
-    def get_lda_distances(self, num_hits=25):
-        """ Calculate LDA topic based distances (all-versus-all)
-        
-        Args:
-        -------
-        num_centroid_hits: int
-            Function will store the num_centroid_hits closest matches. Default is 25.      
-        
-        """
-
-        # Now using faster gensim way (also not requiering to load everything into memory at once)
-        index_tmpfile = get_tmpfile("index")
-        index = gensim.similarities.Similarity(index_tmpfile, self.model_lda[self.bow_corpus], 
-                                               num_features=len(self.dictionary))  # build the index
-        Cdist = np.zeros((len(self.corpus), len(self.corpus)))
-        for i, similarities in enumerate(index):  # yield similarities of all indexed documents
-            Cdist[:,i] = similarities
-            
-        Cdist = 1 - Cdist  # switch from similarity to distance
-
-        # Create numpy arrays to store distances
-        Cdistances_idx = np.zeros((Cdist.shape[0],num_hits), dtype=int)
-        Cdistances = np.zeros((Cdist.shape[0],num_hits))
-        
-        for i in range(Cdist.shape[0]):
-            Cdistances_idx[i,:] = Cdist[i,:].argsort()[:num_hits]
-            Cdistances[i,:] = Cdist[i, Cdistances_idx[i,:]]
-
-        self.Cdistances_lda_idx = Cdistances_idx
-        self.Cdistances_lda = Cdistances
-        
-        
-    def get_lsi_distances(self, num_hits=25):
-        """ Calculate LSI based distances (all-versus-all)
+    def get_lda_similarity(self, num_hits=25):
+        """ Calculate LDA topic based similarities (all-versus-all)
         
         Args:
         -------
@@ -530,22 +498,55 @@ class SimilarityMeasures():
         for i, similarities in enumerate(index):  # yield similarities of all indexed documents
             Cdist[:,i] = similarities
             
-        Cdist = 1 - Cdist  # switch from similarity to distance
+#        Cdist = 1 - Cdist  # switch from similarity to distance
 
-        # Create numpy arrays to store distances
-        Cdistances_idx = np.zeros((Cdist.shape[0],num_hits), dtype=int)
-        Cdistances = np.zeros((Cdist.shape[0],num_hits))
+        # Create numpy arrays to store similarities
+        list_similars_idx = np.zeros((Cdist.shape[0],num_hits), dtype=int)
+        list_similars = np.zeros((Cdist.shape[0],num_hits))
         
         for i in range(Cdist.shape[0]):
-            Cdistances_idx[i,:] = Cdist[i,:].argsort()[:num_hits]
-            Cdistances[i,:] = Cdist[i, Cdistances_idx[i,:]]
+            list_similars_idx[i,:] = Cdist[i,:].argsort()[-num_hits:]
+            list_similars[i,:] = Cdist[i, list_similars_idx[i,:]]
 
-        self.Cdistances_lsi_idx = Cdistances_idx
-        self.Cdistances_lsi = Cdistances
+        self.list_similars_lda_idx = list_similars_idx
+        self.list_similars_lda = list_similars
+        
+        
+    def get_lsi_similarity(self, num_hits=25):
+        """ Calculate LSI based similarities (all-versus-all)
+        
+        Args:
+        -------
+        num_centroid_hits: int
+            Function will store the num_centroid_hits closest matches. Default is 25.      
+        
+        """
+
+        # Now using faster gensim way (also not requiering to load everything into memory at once)
+        index_tmpfile = get_tmpfile("index")
+        index = gensim.similarities.Similarity(index_tmpfile, self.model_lda[self.bow_corpus], 
+                                               num_features=len(self.dictionary))  # build the index
+        Cdist = np.zeros((len(self.corpus), len(self.corpus)))
+        for i, similarities in enumerate(index):  # yield similarities of all indexed documents
+            Cdist[:,i] = similarities
+            
+#        Cdist = 1 - Cdist  # switch from similarity to distance
+
+        # Create numpy arrays to store distances
+        list_similars_idx = np.zeros((Cdist.shape[0],num_hits), dtype=int)
+        list_similars = np.zeros((Cdist.shape[0],num_hits))
+        
+        for i in range(Cdist.shape[0]):
+            list_similars_idx[i,:] = Cdist[i,:].argsort()[-num_hits:]
+            list_similars[i,:] = Cdist[i, list_similars_idx[i,:]]
+
+        self.list_similars_lsi_idx = list_similars_idx
+        self.list_similars_lsi = list_similars
+        
 
 
-    def get_doc2vec_distances(self, num_hits=25, method='cosine'):
-        """ Calculate Doc2Vec based distances (all-vs-all)
+    def get_doc2vec_similarity(self, num_hits=25, method='cosine'):
+        """ Calculate Doc2Vec based similarities (all-vs-all)
         
         Args:
         -------
@@ -564,11 +565,12 @@ class SimilarityMeasures():
             for i in range(len(self.corpus)):
                 vectors[i,:] = self.model_doc2vec.docvecs[i]
     
-            Cdistances_idx, Cdistances = functions.calculate_distances(vectors, 
+            list_similars_idx, list_similars, mean_similarity = functions.calculate_similarities(vectors, 
                                                                        num_hits, method = method)
             
-            self.Cdistances_d2v_idx = Cdistances_idx
-            self.Cdistances_d2v = Cdistances
+            self.list_similars_d2v_idx = list_similars_idx
+            self.list_similars_d2v = list_similars
+            self.mean_similarity_d2v = mean_similarity
 
 
     def similarity_search(self, num_centroid_hits=100, centroid_min=0.3, 

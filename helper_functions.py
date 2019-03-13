@@ -145,8 +145,8 @@ def ifd_scores(vocabulary, corpus):
 
 
 
-def calculate_distances(vectors, num_hits=25, method='cosine'):
-    """ Calculate distances (all-versus-all --> matrix) based on array of all vectors
+def calculate_similarities(vectors, num_hits=25, method='cosine'):
+    """ Calculate similarities (all-versus-all --> matrix) based on array of all vectors
     
     Args:
     -------
@@ -154,19 +154,20 @@ def calculate_distances(vectors, num_hits=25, method='cosine'):
         Function will store the num_centroid_hits closest matches. Default is 25.      
     method: str
         See scipy spatial.distance.cdist for options. Default is 'cosine'.
-    
+        
+    TODO: Check how to go from distance to similarity for methods other than cosine!!
     """
     Cdist = spatial.distance.cdist(vectors, vectors, method)
-    mean_distance = np.mean(Cdist)
+    mean_similarity = 1 - np.mean(Cdist)
     # Create numpy arrays to store distances
-    Cdistances_ids = np.zeros((Cdist.shape[0],num_hits), dtype=int)
-    Cdistances = np.zeros((Cdist.shape[0],num_hits))
+    list_similars_ids = np.zeros((Cdist.shape[0],num_hits), dtype=int)
+    list_similars = np.zeros((Cdist.shape[0],num_hits))
     
     for i in range(Cdist.shape[0]):
-        Cdistances_ids[i,:] = Cdist[i,:].argsort()[:num_hits]
-        Cdistances[i,:] = Cdist[i, Cdistances_ids[i,:]]
+        list_similars_ids[i,:] = Cdist[i,:].argsort()[:num_hits]
+        list_similars[i,:] = 1- Cdist[i, list_similars_ids[i,:]]
     
-    return Cdistances_ids, Cdistances, mean_distance
+    return list_similars_ids, list_similars, mean_similarity
 
 
 
