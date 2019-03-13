@@ -142,6 +142,7 @@ class Spectrum(object):
                               self.min_peaks)
         
         self.peaks = peaks
+        self.n_peaks = len(peaks)
 
     def read_spectrum_mgf(self, spectrum_mgf, id):
         """ Translate to THIS spectrum object given that we have a metabolomics.py spectrum object
@@ -165,11 +166,6 @@ class Spectrum(object):
         if spectrum_mgf.metadata:
             self.metadata = spectrum_mgf.metadata
 
-#        if 'parentmass' in spectrum_mgf.metadata:
-#            self.parent_mz = float(spectrum_mgf.metadata['parentmass'])
-#        elif '
-#        if spectrum_mgf.smiles:
-#            self.smiles = spectrum_mgf.smiles
         if 'smiles' in spectrum_mgf.metadata:
             self.smiles = spectrum_mgf.metadata['smiles']
 
@@ -179,6 +175,7 @@ class Spectrum(object):
                               self.min_peaks)
         
         self.peaks = peaks
+        self.n_peaks = len(peaks)
 
 
     def get_losses(self):
@@ -196,6 +193,32 @@ class Spectrum(object):
         # TODO: now array is tranfered back to list (to be able to store as json later). Seems weird.
         losses_list = [(x[0], x[1]) for x in losses[keep_idx,:]]
         self.losses = losses_list
+        
+
+        
+def dict_to_spectrum(spectra_dict): 
+    """ Create spectrum object from spectra_dict.
+    """
+    spectra = []
+    keys = []
+    for key, value in spectra_dict.items():
+        keys.append(key) 
+            
+        spectrum = Spectrum(min_frag = value["min_frag"], 
+                            max_frag = value["max_frag"],
+                            min_loss = value["min_loss"], 
+                            max_loss = value["max_loss"],
+                            min_intensity_perc = 0,
+                            exp_intensity_filter = value["exp_intensity_filter"],
+                            min_peaks = value["min_peaks"])
+        
+        for key2, value2 in value.items():
+            setattr(spectrum, key2, value2)
+            
+        # Collect in form of list of spectrum objects
+        spectra.append(spectrum)
+        
+    return spectra
 
 
 def process_peaks(peaks, min_frag, max_frag, 
@@ -308,6 +331,7 @@ def load_MS_data(path_data, path_json,
         try: 
             spectra_dict = functions.json_to_dict(path_json + results_file)
             print("Spectra json file found and loaded.")
+            spectra = dict_to_spectrum(spectra_dict)
             collect_new_data = False
             
             with open(path_json + results_file[:-4] + "txt", "r") as f:
@@ -401,6 +425,7 @@ def load_MGF_data(path_json,
         try: 
             spectra_dict = functions.json_to_dict(path_json + results_file)
             print("Spectra json file found and loaded.")
+            spectra = dict_to_spectrum(spectra_dict)
             collect_new_data = False
             
             with open(path_json + results_file[:-4] + "txt", "r") as f:
