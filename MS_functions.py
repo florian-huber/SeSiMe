@@ -214,7 +214,9 @@ def dict_to_spectrum(spectra_dict):
         
         for key2, value2 in value.items():
             setattr(spectrum, key2, value2)
-            
+         
+        spectrum.peaks = [(x[0],x[1]) for x in spectrum.peaks]  # convert to tuples
+        
         # Collect in form of list of spectrum objects
         spectra.append(spectrum)
         
@@ -515,6 +517,10 @@ def load_MGF_data(path_json,
     return spectra, spectra_dict, MS_documents, MS_documents_intensity
 
 
+## ----------------------------------------------------------------------------
+## ---------------------- Functions to analyse MS data ------------------------
+## ----------------------------------------------------------------------------
+
 
 def create_MS_documents(spectra, num_decimals,
                         min_loss = 10.0, max_loss = 200.0):
@@ -672,12 +678,14 @@ def compare_molecule_selection(query_id, spectra_dict, MS_measure,
 
 
 
-def evaluate_measure(spectra_dict, MS_measure, 
-                               fingerprints,
-                               num_candidates = 25,
-                               num_of_molecules = "all", 
-                               similarity_method = "centroid",
-                               reference_list = None):
+def evaluate_measure(spectra_dict, 
+                     spectra,
+                     MS_measure, 
+                       fingerprints,
+                       num_candidates = 25,
+                       num_of_molecules = "all", 
+                       similarity_method = "centroid",
+                       reference_list = None):
     """ Compare spectra-based similarity with smile-based similarity
         
     Args:
@@ -695,40 +703,55 @@ def evaluate_measure(spectra_dict, MS_measure,
     similarity_method: str
         Define method to use (default = "centroid").
     """
+    num_spectra = len(MS_measure.corpus)
+    
     # Create reference list if not given as args:
     if reference_list is None:
         if num_of_molecules == "all":
-            reference_list = np.arange(len(MS_measure.corpus))
+            reference_list = np.arange(num_spectra)
         elif isinstance(num_of_molecules, int): 
             reference_list = np.array(random.sample(list(np.arange(len(fingerprints))),k=num_of_molecules))
         else:
             print("num_of_molecules needs to be integer or 'all'.")
         
-    mol_dist = np.zeros((len(reference_list), num_candidates))
-    spec_dist = np.zeros((len(reference_list), num_candidates))
-    rand_dist = np.zeros((len(reference_list), num_candidates))
+    mol_sim = np.zeros((len(reference_list), num_candidates))
+    spec_sim = np.zeros((len(reference_list), num_candidates))
+#    rand_sim = np.zeros((len(reference_list), num_candidates))
+    molnet_sim = np.zeros((len(reference_list), num_candidates))
+    
+    list_similars_ids = np.zeros((len(reference_list), num_candidates), dtype=int)
+    list_similars = np.zeros((len(reference_list), num_candidates))
     
     for i, query_id in enumerate(reference_list):
         
         # Select chosen similarity methods
         if similarity_method == "centroid":
             candidates_idx = MS_measure.list_similars_ctr_idx[query_id, :num_candidates]
-            candidates_dist = MS_measure.list_similars_ctr[query_id, :num_candidates]
+            candidates_sim = MS_measure.list_similars_ctr[query_id, :num_candidates]
         elif similarity_method == "pca":
             candidates_idx = MS_measure.list_similars_pca_idx[query_id, :num_candidates]
-            candidates_dist = MS_measure.list_similars_pca[query_id, :num_candidates]
+            candidates_sim = MS_measure.list_similars_pca[query_id, :num_candidates]
         elif similarity_method == "autoencoder":
             candidates_idx = MS_measure.list_similars_ae_idx[query_id, :num_candidates]
-            candidates_dist = MS_measure.list_similars_ae[query_id, :num_candidates]
+            candidates_sim = MS_measure.list_similars_ae[query_id, :num_candidates]
         elif similarity_method == "lda":
             candidates_idx = MS_measure.list_similars_lda_idx[query_id, :num_candidates]
-            candidates_dist = MS_measure.list_similars_lda[query_id, :num_candidates]
+            candidates_sim = MS_measure.list_similars_lda[query_id, :num_candidates]
         elif similarity_method == "lsi":
             candidates_idx = MS_measure.list_similars_lsi_idx[query_id, :num_candidates]
-            candidates_dist = MS_measure.list_similars_lsi[query_id, :num_candidates]
+            candidates_sim = MS_measure.list_similars_lsi[query_id, :num_candidates]
         elif similarity_method == "doc2vec":
             candidates_idx = MS_measure.list_similars_d2v_idx[query_id, :num_candidates]
-            candidates_dist = MS_measure.list_similars_d2v[query_id, :num_candidates]
+            candidates_sim = MS_measure.list_similars_d2v[query_id, :num_candidates]
+            
+        elif similarity_method == "molnet":
+            molnet_sim = np.zeros((num_spectra))
+            for cand_id in range(num_spectra):
+                molnet_sim[cand_id], _ = fast_cosine_shift(spectra[query_id], spectra[cand_id], 0.2, 2)
+
+            candidates_idx = molnet_sim.argsort()[-num_candidates:][::-1]
+            candidates_sim = molnet_sim[candidates_idx]
+                
         else:
             print("Chosen similarity measuring method not found.")
 
@@ -736,17 +759,99 @@ def evaluate_measure(spectra_dict, MS_measure,
         if fingerprints[query_id] != 0:
             for j, cand_id in enumerate(candidates_idx): 
                 if fingerprints[cand_id] != 0:     
-                    mol_dist[i, j] = DataStructs.FingerprintSimilarity(fingerprints[query_id], fingerprints[cand_id])
+                    mol_sim[i, j] = DataStructs.FingerprintSimilarity(fingerprints[query_id], fingerprints[cand_id])
                     
-        spec_dist[i,:] = candidates_dist
+        spec_sim[i,:] = candidates_sim
         
-        rand_idx = np.array(random.sample(list(np.arange(len(fingerprints))),k=num_candidates))
-        if fingerprints[query_id] != 0:
-            for j, cand_id in enumerate(rand_idx): 
-                if fingerprints[cand_id] != 0:  
-                    rand_dist[i,j] = DataStructs.FingerprintSimilarity(fingerprints[query_id], fingerprints[cand_id])
+#        rand_idx = np.array(random.sample(list(np.arange(len(fingerprints))),k=num_candidates))
+#        if fingerprints[query_id] != 0:
+#            for j, cand_id in enumerate(rand_idx): 
+#                if fingerprints[cand_id] != 0:  
+#                    rand_sim[i,j] = DataStructs.FingerprintSimilarity(fingerprints[query_id], fingerprints[cand_id])
 
-    return mol_dist, spec_dist, rand_dist, reference_list
+#        # Calculate Mol.networking cosine similarity (incl. shift by parent mass)
+#        for j, cand_id in enumerate(candidates_idx): 
+#            molnet_sim[i, j], _ = fast_cosine_shift(spectra[query_id], spectra[cand_id], 0.2, 2)
+                    
+        spec_sim[i,:] = candidates_sim
+
+    return mol_sim, spec_sim, molnet_sim, reference_list
+
+
+"""
+From Simon Rogers
+molnet
+"""
+def fast_cosine_shift(spectrum1, spectrum2, tol, min_match):
+    if len(spectrum1.peaks) == 0 or len(spectrum2.peaks) == 0:
+        return 0.0,[]
+
+#    spec1 = spectrum1.normalised_peaks
+#    spec2 = spectrum2.normalised_peaks
+
+    spec1 = np.array(spectrum1.peaks)
+    spec2 = np.array(spectrum2.peaks)
+    
+    # normalize intensities:
+    spec1[:,1] = spec1[:,1]/max(spec1[:,1])
+    spec2[:,1] = spec2[:,1]/max(spec2[:,1])
+    
+    # Sort by peak m/z:
+    spec1 = spec1[np.lexsort((spec1[:,1], spec1[:,0])),:]
+    spec2 = spec2[np.lexsort((spec2[:,1], spec2[:,0])),:]
+    
+    zero_pairs = find_pairs(spec1, spec2, tol, shift=0.0)
+
+    shift = spectrum1.parent_mz - spectrum2.parent_mz
+
+    nonzero_pairs = find_pairs(spec1, spec2, tol, shift = shift)
+
+    matching_pairs = zero_pairs + nonzero_pairs
+
+    matching_pairs = sorted(matching_pairs,key = lambda x: x[2], reverse = True)
+
+    used1 = set()
+    used2 = set()
+    score = 0.0
+    used_matches = []
+    for m in matching_pairs:
+        if not m[0] in used1 and not m[1] in used2:
+            score += m[2]
+            used1.add(m[0])
+            used2.add(m[1])
+            used_matches.append(m)
+    if len(used_matches) < min_match:
+        score = 0.0
+        
+    # normalize score:
+    score = score/max(np.sum(spec1[:,1]**2), np.sum(spec2[:,1]**2))
+    
+    return score, used_matches
+
+
+def find_pairs(spec1, spec2, tol, shift=0):
+    matching_pairs = []
+    spec2lowpos = 0
+    spec2length = len(spec2)
+    
+    for idx in range(len(spec1)):
+#        ,(mz,intensity) in enumerate(spec1):
+        mz = spec1[idx,0]
+        intensity = spec1[idx,1]
+        # do we need to increase the lower idx?
+        while spec2lowpos < spec2length and spec2[spec2lowpos][0] + shift < mz - tol:
+            spec2lowpos += 1
+        if spec2lowpos == spec2length:
+            break
+        spec2pos = spec2lowpos
+        while(spec2pos < spec2length and spec2[spec2pos][0] + shift < mz + tol):
+            matching_pairs.append((idx, spec2pos, intensity*spec2[spec2pos][1]))
+            spec2pos += 1
+        
+    return matching_pairs    
+
+
+
 
 ## ----------------------------------------------------------------------------
 ## ---------------------------- Plotting functions ----------------------------

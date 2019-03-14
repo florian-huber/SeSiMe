@@ -170,8 +170,3 @@ def calculate_similarities(vectors, num_hits=25, method='cosine'):
     return list_similars_ids, list_similars, mean_similarity
 
 
-
-
-
-
-
