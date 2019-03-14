@@ -13,6 +13,7 @@ import fnmatch
 import copy
 import numpy as np
 from scipy.optimize import curve_fit
+from scipy.optimize import linear_sum_assignment
 import random
 
 from rdkit import DataStructs
@@ -295,8 +296,13 @@ def process_peaks(peaks, min_frag, max_frag,
             peaks = peaks[np.lexsort((peaks[:,0], peaks[:,1])),:][-min_peaks:]
         else:
             peaks = peaks[keep_idx, :]
+        
+        # Sort by peak m/z
+        peaks = peaks[np.lexsort((peaks[:,1], peaks[:,0])),:]
         return [(x[0], x[1]) for x in peaks] # TODO: now array is transfered back to list (to be able to store as json later). Seems weird.
     else:
+        # Sort by peak m/z
+        peaks = peaks[np.lexsort((peaks[:,1], peaks[:,0])),:]
         return [(x[0], x[1]) for x in peaks]
 
 
@@ -716,14 +722,16 @@ def evaluate_measure(spectra_dict,
         
     mol_sim = np.zeros((len(reference_list), num_candidates))
     spec_sim = np.zeros((len(reference_list), num_candidates))
+    spec_idx = np.zeros((len(reference_list), num_candidates))
 #    rand_sim = np.zeros((len(reference_list), num_candidates))
     molnet_sim = np.zeros((len(reference_list), num_candidates))
     
-    list_similars_ids = np.zeros((len(reference_list), num_candidates), dtype=int)
-    list_similars = np.zeros((len(reference_list), num_candidates))
-    
     for i, query_id in enumerate(reference_list):
+        # Show progress:
         
+        if (i+1) % 10 == 0 or i == len(reference_list)-1:  
+                print('\r', ' Evaluate spectrum ', i+1, ' of ', len(reference_list), ' spectra.', end="")
+
         # Select chosen similarity methods
         if similarity_method == "centroid":
             candidates_idx = MS_measure.list_similars_ctr_idx[query_id, :num_candidates]
@@ -747,7 +755,8 @@ def evaluate_measure(spectra_dict,
         elif similarity_method == "molnet":
             molnet_sim = np.zeros((num_spectra))
             for cand_id in range(num_spectra):
-                molnet_sim[cand_id], _ = fast_cosine_shift(spectra[query_id], spectra[cand_id], 0.2, 2)
+#                molnet_sim[cand_id], _ = fast_cosine_shift(spectra[query_id], spectra[cand_id], 0.2, 2)
+                molnet_sim[cand_id] = fast_cosine_shift2(spectra[query_id], spectra[cand_id], 0.2, spectra[0].max_frag)
 
             candidates_idx = molnet_sim.argsort()[-num_candidates:][::-1]
             candidates_sim = molnet_sim[candidates_idx]
@@ -761,7 +770,6 @@ def evaluate_measure(spectra_dict,
                 if fingerprints[cand_id] != 0:     
                     mol_sim[i, j] = DataStructs.FingerprintSimilarity(fingerprints[query_id], fingerprints[cand_id])
                     
-        spec_sim[i,:] = candidates_sim
         
 #        rand_idx = np.array(random.sample(list(np.arange(len(fingerprints))),k=num_candidates))
 #        if fingerprints[query_id] != 0:
@@ -774,8 +782,9 @@ def evaluate_measure(spectra_dict,
 #            molnet_sim[i, j], _ = fast_cosine_shift(spectra[query_id], spectra[cand_id], 0.2, 2)
                     
         spec_sim[i,:] = candidates_sim
+        spec_idx[i,:] = candidates_idx
 
-    return mol_sim, spec_sim, molnet_sim, reference_list
+    return mol_sim, spec_sim, spec_idx, molnet_sim, reference_list
 
 
 """
@@ -796,9 +805,9 @@ def fast_cosine_shift(spectrum1, spectrum2, tol, min_match):
     spec1[:,1] = spec1[:,1]/max(spec1[:,1])
     spec2[:,1] = spec2[:,1]/max(spec2[:,1])
     
-    # Sort by peak m/z:
-    spec1 = spec1[np.lexsort((spec1[:,1], spec1[:,0])),:]
-    spec2 = spec2[np.lexsort((spec2[:,1], spec2[:,0])),:]
+#    # Sort by peak m/z:
+#    spec1 = spec1[np.lexsort((spec1[:,1], spec1[:,0])),:]
+#    spec2 = spec2[np.lexsort((spec2[:,1], spec2[:,0])),:]
     
     zero_pairs = find_pairs(spec1, spec2, tol, shift=0.0)
 
@@ -826,8 +835,111 @@ def fast_cosine_shift(spectrum1, spectrum2, tol, min_match):
     # normalize score:
     score = score/max(np.sum(spec1[:,1]**2), np.sum(spec2[:,1]**2))
     
-    return score, used_matches
+    return score #, used_matches
 
+
+def fast_cosine_shift2(spectrum1, spectrum2, tol, max_mz):
+    """ try to speed up things
+    """
+    if len(spectrum1.peaks) == 0 or len(spectrum2.peaks) == 0:
+        return 0.0,[]
+
+    spec1 = np.array(spectrum1.peaks.copy())
+    spec2 = np.array(spectrum2.peaks.copy())
+    
+    # normalize intensities:
+    spec1[:,1] = spec1[:,1]/np.max(spec1[:,1])
+    spec2[:,1] = spec2[:,1]/np.max(spec2[:,1])
+    
+#    # Sort by peak m/z: SOULD BE DONE ALREADY in spectrum object...
+#    spec1 = spec1[np.lexsort((spec1[:,1], spec1[:,0])),:]
+#    spec2 = spec2[np.lexsort((spec2[:,1], spec2[:,0])),:]
+    
+    spec1_onehot = one_hot_spectrum(spec1, tol, max_mz, shift=0, min_mz = 0)
+    spec2_onehot = one_hot_spectrum(spec2, tol, max_mz, shift=0, min_mz = 0)
+    
+    shift = spectrum1.parent_mz - spectrum2.parent_mz
+    spec2_onehot_shift = one_hot_spectrum(spec2, tol, max_mz, shift=shift, min_mz = 0)
+    
+    peak_pairs = np.zeros((len(spec1_onehot),2))
+    peak_pairs[:,0] = spec1_onehot * spec2_onehot
+    peak_pairs[:,1] = spec1_onehot * spec2_onehot_shift
+
+    matching_pairs = np.amax(peak_pairs, axis=1)
+
+#    #score (not normalized)
+#    score = np.sum(matching_pairs)
+
+    # Score (normalized)
+    score = np.sum(matching_pairs)/max(np.sum(spec1_onehot**2), np.sum(spec2_onehot**2))
+  
+    return score
+
+    
+def fast_cosine_shift3(spectrum1, spectrum2, tol, min_match):
+    """ Taking full care of weighted bipartite matching problem:
+        Use Hungarian algorithm (slow...)
+    """
+    if len(spectrum1.peaks) == 0 or len(spectrum2.peaks) == 0:
+        return 0.0,[]
+
+    spec1 = np.array(spectrum1.peaks)
+    spec2 = np.array(spectrum2.peaks)
+    
+    # normalize intensities:
+    spec1[:,1] = spec1[:,1]/max(spec1[:,1])
+    spec2[:,1] = spec2[:,1]/max(spec2[:,1])
+    
+    zero_pairs = find_pairs2(spec1, spec2, tol, shift=0.0)
+
+    shift = spectrum1.parent_mz - spectrum2.parent_mz
+
+    nonzero_pairs = find_pairs(spec1, spec2, tol, shift = shift)
+
+    matching_pairs = zero_pairs + nonzero_pairs
+
+    # Use Hungarian_algorithm:
+    set1 = set()
+    set2 = set()
+    for m in matching_pairs:
+        set1.add(m[0])
+        set2.add(m[1])
+    
+    list1 = list(set1)
+    list2 = list(set2)
+    matrix_size = max(len(set1), len(set2))    
+    matrix = np.ones((matrix_size, matrix_size))
+    
+    for m in matching_pairs:
+        matrix[list1.index(m[0]),list2.index(m[1])] = 1 - m[2]
+
+    row_ind, col_ind = linear_sum_assignment(matrix)
+    score = matrix.shape[0] - matrix[row_ind, col_ind].sum()
+        
+    # normalize score:
+    score = score/max(np.sum(spec1[:,1]**2), np.sum(spec2[:,1]**2))
+    
+    return score
+
+
+def molnet_matrix(spectra, tol, max_mz, min_mz = 0):
+    """ Create Matrix of all mol.networking similarities
+    """  
+
+
+
+def one_hot_spectrum(spec, tol, max_mz, shift = 0, min_mz = 0):
+    """ Convert spectrum peaks into on-hot-vector
+    """
+    dim_vector = int((max_mz - min_mz)/tol)
+    one_hot_spec = np.zeros((dim_vector))
+    idx = ((spec[:,0] + shift)*1/tol).astype(int)
+    idx[idx>=dim_vector] = 0
+    idx[idx<0] = 0
+    one_hot_spec[idx] = spec[:,1]
+    
+    return one_hot_spec
+    
 
 def find_pairs(spec1, spec2, tol, shift=0):
     matching_pairs = []
@@ -851,6 +963,23 @@ def find_pairs(spec1, spec2, tol, shift=0):
     return matching_pairs    
 
 
+
+def find_pairs2(spec1, spec2, tol, shift=0):
+    """ Alternative numpy based approach (check what's faster)
+    TODO: seems slower, check again?
+    """
+    matching_pairs = []
+    
+    cand_idx = []
+    for idx in range(len(spec1)):
+        cands = np.where(np.abs(spec2[:,0] + shift - spec1[idx,0]) < tol)[0]
+        for cand in cands:
+            cand_idx.append((idx, cand))
+
+    for (idx, idx2) in cand_idx:
+        matching_pairs.append((idx, idx2, spec1[idx,1]*spec2[idx2,1])) 
+        
+    return matching_pairs  
 
 
 ## ----------------------------------------------------------------------------
