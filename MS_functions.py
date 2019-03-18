@@ -755,8 +755,8 @@ def evaluate_measure(spectra_dict,
         elif similarity_method == "molnet":
             molnet_sim = np.zeros((num_spectra))
             for cand_id in range(num_spectra):
-#                molnet_sim[cand_id], _ = fast_cosine_shift(spectra[query_id], spectra[cand_id], 0.2, 2)
-                molnet_sim[cand_id] = fast_cosine_shift2(spectra[query_id], spectra[cand_id], 0.2, spectra[0].max_frag)
+                molnet_sim[cand_id] = fast_cosine_shift(spectra[query_id], spectra[cand_id], 0.2, 2)
+#                molnet_sim[cand_id] = fast_cosine_shift2(spectra[query_id], spectra[cand_id], 0.2, spectra[0].max_frag)
 
             candidates_idx = molnet_sim.argsort()[-num_candidates:][::-1]
             candidates_sim = molnet_sim[candidates_idx]
@@ -769,8 +769,7 @@ def evaluate_measure(spectra_dict,
             for j, cand_id in enumerate(candidates_idx): 
                 if fingerprints[cand_id] != 0:     
                     mol_sim[i, j] = DataStructs.FingerprintSimilarity(fingerprints[query_id], fingerprints[cand_id])
-                    
-        
+
 #        rand_idx = np.array(random.sample(list(np.arange(len(fingerprints))),k=num_candidates))
 #        if fingerprints[query_id] != 0:
 #            for j, cand_id in enumerate(rand_idx): 
@@ -840,6 +839,7 @@ def fast_cosine_shift(spectrum1, spectrum2, tol, min_match):
 
 def fast_cosine_shift2(spectrum1, spectrum2, tol, max_mz):
     """ try to speed up things
+    DOESN't work well!!
     """
     if len(spectrum1.peaks) == 0 or len(spectrum2.peaks) == 0:
         return 0.0,[]
