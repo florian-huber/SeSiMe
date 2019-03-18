@@ -204,14 +204,14 @@ def load_BGC_data(path_bgc_data,
 
 
 
-def BGC_distance_network(Cdistances_ids, Cdistances, filename="Bnet_word2vec_test.graphml", cutoff_dist=0.15):
+def BGC_distance_network(list_similars_ids, list_similars, filename="Bnet_word2vec_test.graphml", cutoff_dist=0.15):
     """ Built network from closest connections found
         Using networkx
         
         TODO: Add maximum number of connections 
     """
     
-    dimension = Cdistances_ids.shape[0]
+    dimension = list_similars_ids.shape[0]
     
     # Form network
     import networkx as nx
@@ -219,9 +219,9 @@ def BGC_distance_network(Cdistances_ids, Cdistances, filename="Bnet_word2vec_tes
     Bnet.add_nodes_from(np.arange(0,dimension))   
     
     for i in range(0,dimension):      
-#        idx = Cdistances_ids[i, (Cdistances[i,:] < cutoff_dist)]
-        idx = np.where(Cdistances[i,:] < cutoff_dist)[0]
-        new_edges = [(i, int(Cdistances_ids[i,x]), float(Cdistances[i,x])) for x in idx if Cdistances_ids[i,x] != i]
+#        idx = list_similars_ids[i, (list_similars[i,:] < cutoff_dist)]
+        idx = np.where(list_similars[i,:] < cutoff_dist)[0]
+        new_edges = [(i, int(list_similars_ids[i,x]), float(list_similars[i,x])) for x in idx if list_similars_ids[i,x] != i]
         Bnet.add_weighted_edges_from(new_edges)
 #        Bnet.add_edge(i, int(candidate), weight=float((max_distance - distances[i,candidate])/max_distance) )
         
@@ -344,23 +344,23 @@ def plot_bgc_genes(query_id, BGCs_dict, BGC_measure, num_candidates = 10,
 
     # Select chosen distance methods
     if dist_method == "centroid":
-        candidates_idx = BGC_measure.Cdistances_ctr_idx[query_id, :num_candidates]
-        candidates_dist = BGC_measure.Cdistances_ctr[query_id, :num_candidates]
+        candidates_idx = BGC_measure.list_similars_ctr_idx[query_id, :num_candidates]
+        candidates_dist = BGC_measure.list_similars_ctr[query_id, :num_candidates]
     elif dist_method == "pca":
-        candidates_idx = BGC_measure.Cdistances_pca_idx[query_id, :num_candidates]
-        candidates_dist = BGC_measure.Cdistances_pca[query_id, :num_candidates]
+        candidates_idx = BGC_measure.list_similars_pca_idx[query_id, :num_candidates]
+        candidates_dist = BGC_measure.list_similars_pca[query_id, :num_candidates]
     elif dist_method == "autoencoder":
-        candidates_idx = BGC_measure.Cdistances_ae_idx[query_id, :num_candidates]
-        candidates_dist = BGC_measure.Cdistances_ae[query_id, :num_candidates]
+        candidates_idx = BGC_measure.list_similars_ae_idx[query_id, :num_candidates]
+        candidates_dist = BGC_measure.list_similars_ae[query_id, :num_candidates]
     elif dist_method == "lda":
-        candidates_idx = BGC_measure.Cdistances_lda_idx[query_id, :num_candidates]
-        candidates_dist = BGC_measure.Cdistances_lda[query_id, :num_candidates]
+        candidates_idx = BGC_measure.list_similars_lda_idx[query_id, :num_candidates]
+        candidates_dist = BGC_measure.list_similars_lda[query_id, :num_candidates]
     elif dist_method == "lsi":
-        candidates_idx = BGC_measure.Cdistances_lsi_idx[query_id, :num_candidates]
-        candidates_dist = BGC_measure.Cdistances_lsi[query_id, :num_candidates]
+        candidates_idx = BGC_measure.list_similars_lsi_idx[query_id, :num_candidates]
+        candidates_dist = BGC_measure.list_similars_lsi[query_id, :num_candidates]
     elif dist_method == "doc2vec":
-        candidates_idx = BGC_measure.Cdistances_d2v_idx[query_id, :num_candidates]
-        candidates_dist = BGC_measure.Cdistances_d2v[query_id, :num_candidates]
+        candidates_idx = BGC_measure.list_similars_d2v_idx[query_id, :num_candidates]
+        candidates_dist = BGC_measure.list_similars_d2v[query_id, :num_candidates]
     else:
         print("Chosen distance measuring method not found.")
 
