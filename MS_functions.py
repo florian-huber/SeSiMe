@@ -790,12 +790,9 @@ def evaluate_measure(spectra_dict,
 From Simon Rogers
 molnet
 """
-def fast_cosine_shift(spectrum1, spectrum2, tol, min_match):
+def fast_cosine_shift(spectrum1, spectrum2, tol, min_match, min_intens = 0):
     if len(spectrum1.peaks) == 0 or len(spectrum2.peaks) == 0:
         return 0.0,[]
-
-#    spec1 = spectrum1.normalised_peaks
-#    spec2 = spectrum2.normalised_peaks
 
     spec1 = np.array(spectrum1.peaks)
     spec2 = np.array(spectrum2.peaks)
@@ -803,6 +800,10 @@ def fast_cosine_shift(spectrum1, spectrum2, tol, min_match):
     # normalize intensities:
     spec1[:,1] = spec1[:,1]/max(spec1[:,1])
     spec2[:,1] = spec2[:,1]/max(spec2[:,1])
+    
+    # filter, if wanted:
+    spec1 = spec1[spec1[:,1] > min_intens,:]
+    spec2 = spec2[spec2[:,1] > min_intens,:]
     
 #    # Sort by peak m/z:
 #    spec1 = spec1[np.lexsort((spec1[:,1], spec1[:,0])),:]
@@ -980,6 +981,116 @@ def find_pairs2(spec1, spec2, tol, shift=0):
         matching_pairs.append((idx, idx2, spec1[idx,1]*spec2[idx2,1])) 
         
     return matching_pairs  
+
+
+def find_all_pairs(spectra, query_id, tol, min_match = 2):
+    """ Alternative numpy based approach (check what's faster)
+    TODO: so far seem to be much slower!!!
+    """
+ 
+    similarities = np.zeros((len(spectra)))
+
+    max_peaks = 0
+    parent_mzs = np.zeros((len(spectra)))
+    for i, spec in enumerate(spectra):
+        if len(spec.peaks) > max_peaks:
+            max_peaks = len(spec.peaks)
+        parent_mzs[i] = spec.parent_mz
+    
+    # Create two numpy arrays for all peaks and intensities        
+    peaks_all = np.zeros((len(spectra), max_peaks))      
+    intensities_all = np.zeros((len(spectra), max_peaks))       
+    
+    for i, spec in enumerate(spectra):
+        peaks = np.array(spec.peaks)
+        peaks_all[i,:len(peaks)] = peaks[:,0]
+        intensities_all[i,:len(peaks)] = peaks[:,1]/max(peaks[:,1])
+               
+#    found_pairs = []
+
+    for idx in range(len(spectra[query_id].peaks)):
+        cands = np.where(np.abs(peaks_all - peaks_all[query_id, idx]) < tol)
+        cands_arr = np.array(cands)
+        pairs = np.zeros((5, cands_arr.shape[1]))
+        
+        pairs[0,:] = query_id
+        pairs[1,:] = idx
+        pairs[2:4,:] = cands_arr
+        pairs[4,:] = intensities_all[query_id, idx] * intensities_all[cands]
+        if idx == 0:
+            found_pairs = pairs
+        else:
+            found_pairs = np.concatenate((found_pairs, pairs), axis=1)
+        
+    found_pairs = found_pairs[:,np.lexsort((found_pairs[3,:], 
+                                            found_pairs[1,:], 
+                                            found_pairs[2,:]))]
+    
+#        shift = spectrum1.parent_mz - spectrum2.parent_mz
+    # Calculate shift matrix   
+    shift_matrix = np.tile((spectra[query_id].parent_mz - parent_mzs), (max_peaks,1)).T
+    
+
+    # SAME with parent m/z shift ----------------------------------------------
+    for idx in range(len(spectra[query_id].peaks)):
+        cands_shift = np.where(np.abs(peaks_all + shift_matrix - peaks_all[query_id, idx]) < tol)
+        cands_arr_shift = np.array(cands_shift)
+        pairs_shift = np.zeros((5, cands_arr_shift.shape[1]))
+        
+        pairs_shift[0,:] = query_id
+        pairs_shift[1,:] = idx
+        pairs_shift[2:4,:] = cands_arr_shift
+        pairs_shift[4,:] = intensities_all[query_id, idx] * intensities_all[cands_shift]
+        if idx == 0:
+            found_pairs_shift = pairs_shift
+        else:
+            found_pairs_shift = np.concatenate((found_pairs_shift, pairs_shift), axis=1)
+        
+    found_pairs_shift = found_pairs_shift[:,np.lexsort((found_pairs_shift[3,:], 
+                                                        found_pairs_shift[1,:], 
+                                                        found_pairs_shift[2,:]))]
+    # Select all candidates with matching peaks:
+    set_cands = set()
+    set_cands.update(found_pairs[2,:].astype(int))
+    set_cands.update(found_pairs_shift[2,:].astype(int))
+
+    matching_pairs = []
+    matching_pairs_shift = []
+    for x in list(set_cands):  
+        idx = np.where(found_pairs[2,:] == x)[0]
+        matching_pairs = list(zip(found_pairs[1, idx].astype(int), 
+                                  found_pairs[3, idx].astype(int), 
+                                  found_pairs[4, idx]))
+
+        idx = np.where(found_pairs_shift[2,:] == x)[0]
+        matching_pairs_shift = list(zip(found_pairs_shift[1, idx].astype(int), 
+                                        found_pairs_shift[3, idx].astype(int), 
+                                        found_pairs_shift[4, idx]))
+
+
+        matching_pairs_total = matching_pairs + matching_pairs_shift
+        matching_pairs_total = sorted(matching_pairs_total, key = lambda x: x[2], reverse = True)
+    
+        used1 = set()
+        used2 = set()
+        score = 0.0
+        used_matches = []
+        for m in matching_pairs:
+            if not m[0] in used1 and not m[1] in used2:
+                score += m[2]
+                used1.add(m[0])
+                used2.add(m[1])
+                used_matches.append(m)
+        if len(used_matches) < min_match:
+            score = 0.0
+            
+        # normalize score:
+        score = score/max(np.sum(intensities_all[query_id,:]**2), 
+                          np.sum(intensities_all[x,:]**2))
+        similarities[x] = score
+        
+    return similarities 
+
 
 
 ## ----------------------------------------------------------------------------
