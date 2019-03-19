@@ -19,9 +19,9 @@ import random
 from rdkit import DataStructs
 from rdkit.Chem.Fingerprints import FingerprintMols
 
-## ----------------------------------------------------------------------------
-## ---------------------------- Spectrum class --------------------------------
-## ----------------------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------
+## ---------------------------- Spectrum class ------------------------------------------------------
+## --------------------------------------------------------------------------------------------------
 
 class Spectrum(object):
     """ Spectrum class to store key information
@@ -523,9 +523,9 @@ def load_MGF_data(path_json,
     return spectra, spectra_dict, MS_documents, MS_documents_intensity
 
 
-## ----------------------------------------------------------------------------
-## ---------------------- Functions to analyse MS data ------------------------
-## ----------------------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------
+## ---------------------- Functions to analyse MS data ----------------------------------------------
+## --------------------------------------------------------------------------------------------------
 
 
 def create_MS_documents(spectra, num_decimals,
@@ -691,8 +691,16 @@ def evaluate_measure(spectra_dict,
                        num_candidates = 25,
                        num_of_molecules = "all", 
                        similarity_method = "centroid",
+                       molnet_sim = None,
                        reference_list = None):
-    """ Compare spectra-based similarity with smile-based similarity
+    """ Compare spectra-based similarity with smile-based similarity.
+    
+    Output:
+    -------
+    mol_sim: matrix with molecule similarity scores for TOP 'num_candidates' for 'num_of_molecules'.
+    spec_sim: matrix with spectra similarity for TOP 'num_candidates' for 'num_of_molecules' (using 'similarity_method').
+    spec_idx: matrix with spectra IDs corresponding to spec_sim values.
+    reference_list: list of selected 'num_of_molecules'. Will contain all IDs if num_of_molecules = "all".
         
     Args:
     -------
@@ -723,8 +731,10 @@ def evaluate_measure(spectra_dict,
     mol_sim = np.zeros((len(reference_list), num_candidates))
     spec_sim = np.zeros((len(reference_list), num_candidates))
     spec_idx = np.zeros((len(reference_list), num_candidates))
-#    rand_sim = np.zeros((len(reference_list), num_candidates))
-    molnet_sim = np.zeros((len(reference_list), num_candidates))
+#    molnet_sim = np.zeros((len(reference_list), num_candidates))
+    
+    candidates_idx = np.zeros((num_candidates), dtype=int)
+    candidates_sim = np.zeros((num_candidates))
     
     for i, query_id in enumerate(reference_list):
         # Show progress:
@@ -752,15 +762,15 @@ def evaluate_measure(spectra_dict,
             candidates_idx = MS_measure.list_similars_d2v_idx[query_id, :num_candidates]
             candidates_sim = MS_measure.list_similars_d2v[query_id, :num_candidates]
             
-        elif similarity_method == "molnet":
-            molnet_sim = np.zeros((num_spectra))
-            for cand_id in range(num_spectra):
-                molnet_sim[cand_id] = fast_cosine_shift(spectra[query_id], spectra[cand_id], 0.2, 2)
-#                molnet_sim[cand_id] = fast_cosine_shift2(spectra[query_id], spectra[cand_id], 0.2, spectra[0].max_frag)
-
-            candidates_idx = molnet_sim.argsort()[-num_candidates:][::-1]
-            candidates_sim = molnet_sim[candidates_idx]
-                
+        elif similarity_method == "molnet":      
+            candidates_idx = molnet_sim[i,:].argsort()[-num_candidates:][::-1]
+            candidates_sim = molnet_sim[i, candidates_idx]
+            
+#            molnet_sim = np.zeros((num_spectra))
+#            for cand_id in range(num_spectra):
+#                molnet_sim[cand_id] = fast_cosine_shift(spectra[query_id], spectra[cand_id], 0.2, 2)
+#            candidates_idx = molnet_sim.argsort()[-num_candidates:][::-1]
+#            candidates_sim = molnet_sim[candidates_idx]                
         else:
             print("Chosen similarity measuring method not found.")
 
@@ -770,20 +780,10 @@ def evaluate_measure(spectra_dict,
                 if fingerprints[cand_id] != 0:     
                     mol_sim[i, j] = DataStructs.FingerprintSimilarity(fingerprints[query_id], fingerprints[cand_id])
 
-#        rand_idx = np.array(random.sample(list(np.arange(len(fingerprints))),k=num_candidates))
-#        if fingerprints[query_id] != 0:
-#            for j, cand_id in enumerate(rand_idx): 
-#                if fingerprints[cand_id] != 0:  
-#                    rand_sim[i,j] = DataStructs.FingerprintSimilarity(fingerprints[query_id], fingerprints[cand_id])
-
-#        # Calculate Mol.networking cosine similarity (incl. shift by parent mass)
-#        for j, cand_id in enumerate(candidates_idx): 
-#            molnet_sim[i, j], _ = fast_cosine_shift(spectra[query_id], spectra[cand_id], 0.2, 2)
-                    
         spec_sim[i,:] = candidates_sim
         spec_idx[i,:] = candidates_idx
 
-    return mol_sim, spec_sim, spec_idx, molnet_sim, reference_list
+    return mol_sim, spec_sim, spec_idx, reference_list
 
 
 """
@@ -832,7 +832,7 @@ def fast_cosine_shift(spectrum1, spectrum2, tol, min_match, min_intens = 0):
     if len(used_matches) < min_match:
         score = 0.0
         
-    # normalize score:
+    # Normalize score:
     score = score/max(np.sum(spec1[:,1]**2), np.sum(spec2[:,1]**2))
     
     return score #, used_matches
@@ -848,7 +848,7 @@ def fast_cosine_shift2(spectrum1, spectrum2, tol, max_mz):
     spec1 = np.array(spectrum1.peaks.copy())
     spec2 = np.array(spectrum2.peaks.copy())
     
-    # normalize intensities:
+    # Normalize intensities:
     spec1[:,1] = spec1[:,1]/np.max(spec1[:,1])
     spec2[:,1] = spec2[:,1]/np.max(spec2[:,1])
     
@@ -923,10 +923,59 @@ def fast_cosine_shift3(spectrum1, spectrum2, tol, min_match):
     return score
 
 
-def molnet_matrix(spectra, tol, max_mz, min_mz = 0):
-    """ Create Matrix of all mol.networking similarities
+def molnet_matrix(spectra, 
+                  tol, 
+                  max_mz, min_mz = 0, 
+                  min_match = 2, min_intens = 0.01,
+                  filename = None):
+    """ Create Matrix of all mol.networking similarities.
+    Takes some time to calculate, so better only do it once and save as npy.
     """  
+    molnet_sim = np.zeros((len(spectra), len(spectra)))
+    for i in range(len(spectra)):
+        # Show progress
+        if (i+1) % 10 == 0 or i == len(spectra)-1:  
+            print('\r', ' Molnet for spectrum ', i+1, ' of ', len(spectra), ' spectra.', end="")
+    
+        for j in range(i,len(spectra)):
+            molnet_sim[i,j] = fast_cosine_shift(spectra[i], spectra[j], tol, min_match, min_intens = min_intens)
+    
+    # Symmetric matrix --> fill        
+    for i in range(1,len(spectra)):
+        for j in range(i):  
+            molnet_sim[i,j] = molnet_sim[j,i]      
 
+    if filename is not None:
+        np.save(filename, molnet_sim)
+            
+    return molnet_sim
+
+
+def tanimoto_matrix(spectra, 
+                  fingerprints,
+                  filename = None):
+    """ Create Matrix of all Tanimoto molecule similarities (based on annotated SMILES).
+    Takes some time to calculate, so better only do it once and save as npy.
+    """  
+    tanimoto_similarities = np.zeros((len(spectra), len(spectra)))
+    for i in range(len(spectra)):
+        # Show progress
+        if (i+1) % 10 == 0 or i == len(spectra)-1:  
+            print('\r', ' Tanimoto for spectrum ', i+1, ' of ', len(spectra), ' spectra.', end="")
+        if fingerprints[i] != 0:
+            for j in range(i,len(spectra)):
+                if fingerprints[j] != 0: 
+                    tanimoto_similarities[i,j] = DataStructs.FingerprintSimilarity(fingerprints[i], fingerprints[j])
+    
+    # Symmetric matrix --> fill        
+    for i in range(1,len(spectra)):
+        for j in range(i):  
+            tanimoto_similarities[i,j] = tanimoto_similarities[j,i]   
+
+    if filename is not None:
+        np.save(filename, tanimoto_similarities)
+
+    return tanimoto_similarities
 
 
 def one_hot_spectrum(spec, tol, max_mz, shift = 0, min_mz = 0):
@@ -1093,10 +1142,11 @@ def find_all_pairs(spectra, query_id, tol, min_match = 2):
 
 
 
-## ----------------------------------------------------------------------------
-## ---------------------------- Plotting functions ----------------------------
-## ----------------------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------
+## ---------------------------- Plotting functions --------------------------------------------------
+## --------------------------------------------------------------------------------------------------
 from matplotlib import pyplot as plt
+from matplotlib.ticker import PercentFormatter
 
 
 def get_spaced_colors_hex(n):
@@ -1243,3 +1293,144 @@ def plot_smiles(query_id, spectra, MS_measure, num_candidates = 10,
             Chem.Draw.MolsToGridImage(molecules,legends=[mol.GetProp('_Name') for mol in molecules])
 
 
+def top_score_histogram(spec_sim, mol_sim, 
+                        score_threshold, 
+                        num_candidates, 
+                        num_bins = 50, 
+                        filename = None):
+    """ Plot histogram of Tanimoto scores (mol_sim) of top selected candidates based on 
+    spectrum similarity scores (spec_sim). 
+    
+    spec_sim, mol_sim : to be calculated with evaluate_measure function.
+    
+    filename: str
+        If not none: save figure to file with given name.
+    """
+    
+    fig, ax = plt.subplots(figsize=(10,10))
+
+    selection = np.where(spec_sim[:,1:] > score_threshold)
+    X = mol_sim[selection[0], selection[1]+1].reshape(len(selection[0]))
+    n, bins, patches = plt.hist(X, num_bins, weights=np.ones(len(X))/len(X), facecolor='blue', edgecolor='white', alpha=0.9)
+    plt.gca().yaxis.set_major_formatter(PercentFormatter(1))
+    plt.title("Tanimoto scores of TOP " + str(num_candidates-1) + " candidates with score > " + str(score_threshold))
+    plt.xlabel("Tanimoto score (based on spectra annotated SMILES)")
+    plt.ylabel("Percentage")
+
+    test = spec_sim[:,1:].reshape(spec_sim.shape[0]*(spec_sim.shape[1]-1))
+    test.sort()
+    text1 = "Mean Tanimoto similarity is " + str(np.round(np.mean(mol_sim[selection[0], selection[1]+1]), 4))
+    text2 = "Spectrum similarity score for TOP " + str(num_candidates-1) + ", top 20% is " + str(np.round(test[int(len(test)*0.8)], 4))
+    text3 = ""
+    plt.text(0, 0.96*np.max(n), text1, fontsize=12, backgroundcolor = "white")
+    plt.text(0, 0.91*np.max(n), text2, fontsize=12, backgroundcolor = "white")
+    plt.text(0, 0.86*np.max(n), text3, fontsize=12, backgroundcolor = "white")
+
+    if filename is not None:
+        plt.savefig(filename, dpi=600)
+    
+    plt.show()
+
+
+
+def compare_best_results(spectra_dict, 
+                         spectra,
+                         MS_measure,
+                         tanimoto_sim,
+                         molnet_sim,
+                         num_candidates = 25,
+                         similarity_method = ["centroid"],
+                         filename = None):
+    """ Compare spectra-based similarity with smile-based similarity and mol.networking.
+
+    Args:
+    -------
+    spectra_dict: dict
+        Dictionary containing all spectra peaks, losses, metadata.
+    MS_measure: object
+        Similariy object containing the model and distance matrices.
+    tanimoto_sim: numpy array
+        Matrix of Tanimoto similarities between SMILES of spectra.
+    molnet_sim: numpy array
+        Matrix of mol. networking similarities of spectra.
+    num_candidates: int
+        Number of candidates to list (default = 25) .
+    similarity_method: str
+        Define method to use (default = "centroid").
+    """
+    num_spectra = len(spectra)
+        
+    spec_best = np.zeros((num_spectra, num_candidates, len(similarity_method)))
+#    spec_best_idx = np.zeros((num_spectra, num_candidates))
+    mol_best = np.zeros((num_spectra, num_candidates))
+    tanimoto_best = np.zeros((num_spectra, num_candidates))
+    
+    candidates_idx = np.zeros((num_candidates), dtype=int)
+    candidates_sim = np.zeros((num_candidates))
+    for k, method in enumerate(similarity_method):
+        for i in range(num_spectra):
+            # Select chosen similarity methods
+            if method == "centroid":
+                candidates_idx = MS_measure.list_similars_ctr_idx[i, :num_candidates]
+            elif method == "pca":
+                candidates_idx = MS_measure.list_similars_pca_idx[i, :num_candidates]
+            elif method == "autoencoder":
+                candidates_idx = MS_measure.list_similars_ae_idx[i, :num_candidates]
+            elif method == "lda":
+                candidates_idx = MS_measure.list_similars_lda_idx[i, :num_candidates]
+            elif method == "lsi":
+                candidates_idx = MS_measure.list_similars_lsi_idx[i, :num_candidates]
+            elif method == "doc2vec":
+                candidates_idx = MS_measure.list_similars_d2v_idx[i, :num_candidates]
+            else:
+                print("Chosen similarity measuring method not found.")
+
+            candidates_sim = tanimoto_sim[i, candidates_idx]
+            spec_best[i,:,k] = candidates_sim
+
+    for i in range(num_spectra):        
+        # Compare to molecular networking score
+        molnet_candidates_idx = molnet_sim[i,:].argsort()[-num_candidates:][::-1]
+        molnet_candidates_sim = tanimoto_sim[i, molnet_candidates_idx]
+        
+        # Compare to maximum possible Tanimoto score
+        tanimoto_candidates_idx = tanimoto_sim[i,:].argsort()[-num_candidates:][::-1]
+        tanimoto_candidates_sim = tanimoto_sim[i, tanimoto_candidates_idx]     
+                
+        mol_best[i,:] = molnet_candidates_sim
+        tanimoto_best[i,:] = tanimoto_candidates_sim
+
+    # Plot figure:  
+    # These are the colors that will be used in the plot
+    color_sequence = ['#003f5c','#882556', '#D65113', '#ffa600', '#58508d', '#bc5090', 
+                      '#ff6361', '#2f4b7c', '#665191', '#a05195', '#d45087'] 
+#    color_sequence = ['#003f5c', '#58508d', '#bc5090', '#ff6361', '#ffa600']
+    # #003f5c #2f4b7c #665191 #a05195 #d45087 #f95d6a #ff7c43 #ffa600
+                      
+    fig, ax = plt.subplots(figsize=(10,8))
+    plt.plot(np.mean(tanimoto_best, axis=0), label='Tanimoto (best)', linewidth=1, markersize=12, 
+             marker='^', linestyle=':', color=color_sequence[0])
+    plt.plot(np.mean(mol_best, axis=0), label='Mol.networking score', linewidth=1, markersize=12, 
+             marker='v', linestyle=':', color=color_sequence[1])
+    for k, method in enumerate(similarity_method):
+        plt.plot(np.mean(spec_best[:,:,k], axis=0), label='Spectrum similarity ('+method, linewidth=1, markersize=12,
+                 marker='o', linestyle=':', color=color_sequence[2+k])
+    plt.legend(fontsize = 14)
+    
+    fig, ax = plt.subplots(figsize=(10,8))
+    plt.plot(np.arange(1,num_candidates), np.mean(mol_best, axis=0)[1:]/np.mean(tanimoto_best, axis=0)[1:], 
+             label='Mol.networking score/Tanimoto max', linewidth=1, markersize=12,
+             marker='v', linestyle=':', color=color_sequence[1])
+    for k, method in enumerate(similarity_method):
+        plt.plot(np.arange(1,num_candidates), np.mean(spec_best[:,:,k], axis=0)[1:]/np.mean(tanimoto_best, axis=0)[1:], 
+                 label='Spectrum similarity (' + method + ')/Tanimoto max', linewidth=1, markersize=12,
+                 marker='o', linestyle=':', color=color_sequence[2+k])
+    plt.legend(fontsize = 14)
+    plt.xticks(range(1, num_candidates), fontsize=12)
+    plt.xlabel("Top 'x' candidates")
+    plt.ylabel("Fraction of max. possible average Tanimoto score")
+    
+    if filename is not None:
+        plt.savefig(filename, dpi=600)
+    
+    return mol_best, spec_best, tanimoto_best

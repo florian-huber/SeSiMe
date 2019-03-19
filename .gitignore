@@ -2,6 +2,9 @@
 *.cys
 *.graphml
 *.csv
+*.png
+*.pdf
+*.npy
 output/
 data/
 models_trained/

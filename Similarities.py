@@ -505,7 +505,7 @@ class SimilarityMeasures():
         list_similars = np.zeros((Cdist.shape[0],num_hits))
         
         for i in range(Cdist.shape[0]):
-            list_similars_idx[i,:] = Cdist[i,:].argsort()[-num_hits:]
+            list_similars_idx[i,:] = Cdist[i,:].argsort()[-num_hits:][::-1]
             list_similars[i,:] = Cdist[i, list_similars_idx[i,:]]
 
         self.list_similars_lda_idx = list_similars_idx
@@ -537,7 +537,7 @@ class SimilarityMeasures():
         list_similars = np.zeros((Cdist.shape[0],num_hits))
         
         for i in range(Cdist.shape[0]):
-            list_similars_idx[i,:] = Cdist[i,:].argsort()[-num_hits:]
+            list_similars_idx[i,:] = Cdist[i,:].argsort()[-num_hits:][::-1]
             list_similars[i,:] = Cdist[i, list_similars_idx[i,:]]
 
         self.list_similars_lsi_idx = list_similars_idx
@@ -606,7 +606,7 @@ class SimilarityMeasures():
             print("Gensim LSI index found.") 
         
 
-        # Calulate distances based on LDA topics...
+        # Calulate similarities based on LDA topics...
         candidates = []
 #        keeptrack = []
 
