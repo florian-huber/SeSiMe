@@ -213,7 +213,7 @@ class SimilarityMeasures():
         
         
     def build_model_lsi(self, file_model_lsi, num_of_topics=100, 
-                        num_iter=100, use_stored_model=True):
+                        num_iter=10, use_stored_model=True):
         """ Build LDA model (using gensim)
         """
         
@@ -227,6 +227,7 @@ class SimilarityMeasures():
             print("Calculating new LSI model...")
             self.model_lsi = gensim.models.LsiModel(self.bow_corpus, 
                                                     id2word=self.dictionary, 
+                                                    power_iters=num_iter,
                                                     num_topics=num_of_topics) 
             
             # Save model
@@ -524,7 +525,7 @@ class SimilarityMeasures():
 
         # Now using faster gensim way (also not requiering to load everything into memory at once)
         index_tmpfile = get_tmpfile("index")
-        index = gensim.similarities.Similarity(index_tmpfile, self.model_lda[self.bow_corpus], 
+        index = gensim.similarities.Similarity(index_tmpfile, self.model_lsi[self.bow_corpus], 
                                                num_features=len(self.dictionary))  # build the index
         Cdist = np.zeros((len(self.corpus), len(self.corpus)))
         for i, similarities in enumerate(index):  # yield similarities of all indexed documents
