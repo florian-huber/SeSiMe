@@ -417,7 +417,7 @@ def plot_bgc_genes(query_id, BGCs_dict, BGC_measure, num_candidates = 10,
         record.plot(ax=ax0[i], with_ruler=True)
 #        ax0[i].set_title("BGC no. " + str(int(candidates["id"][i])) )
         info1 = "BGC no. %d     " %candidates_idx[i]
-        info2 = dist_method + " distance = %.3f" %candidates_dist[i]
+        info2 = dist_method + " similarity = %.3f" %candidates_dist[i]
         ax0[i].text(0.02,0.75, info1 + info2, size=10, ha="left", transform=ax0[i].transAxes)
         if sharex:
             ax0[i].set_xlim([ax0[i].get_xlim()[0], max_xlim])
