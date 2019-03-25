@@ -1339,8 +1339,7 @@ def compare_best_results(spectra_dict,
                          tanimoto_sim,
                          molnet_sim,
                          num_candidates = 25,
-                         similarity_method = ["centroid"],
-                         filename = None):
+                         similarity_method = ["centroid"]):
     """ Compare spectra-based similarity with smile-based similarity and mol.networking.
 
     Args:
@@ -1400,37 +1399,65 @@ def compare_best_results(spectra_dict,
         mol_best[i,:] = molnet_candidates_sim
         tanimoto_best[i,:] = tanimoto_candidates_sim
 
-    # Plot figure:  
+    labels = []
+    avg_best_scores = []
+    labels.append('Tanimoto (best)')
+    avg_best_scores.append(np.mean(tanimoto_best, axis=0))
+    labels.append('Mol.networking score')
+    avg_best_scores.append(np.mean(mol_best, axis=0))
+    
+    for k, method in enumerate(similarity_method):
+        labels.append('Spectrum similarity (' + method + ')')
+        avg_best_scores.append(np.mean(spec_best[:,:,k], axis=0))
+
+    return avg_best_scores, labels
+
+
+def plot_best_results(avg_best_scores,  
+                      labels,
+                      tanimoto_sim,
+                      filename = None):
+    """ Plot best candidate average results.
+    """
+    
+    num_candidates = len(avg_best_scores[0])
+
     # These are the colors that will be used in the plot
     color_sequence = ['#003f5c','#882556', '#D65113', '#ffa600', '#58508d', '#bc5090', 
-                      '#ff6361', '#2f4b7c', '#665191', '#a05195', '#d45087'] 
-#    color_sequence = ['#003f5c', '#58508d', '#bc5090', '#ff6361', '#ffa600']
-    # #003f5c #2f4b7c #665191 #a05195 #d45087 #f95d6a #ff7c43 #ffa600
+                      '#ff6361', '#2651d1', '#2f4b7c', '#a05195', '#d45087'] 
+    markers = ['^', 'v', 'o']
                       
-    fig, ax = plt.subplots(figsize=(10,8))
-    plt.plot(np.mean(tanimoto_best, axis=0), label='Tanimoto (best)', linewidth=1, markersize=12, 
-             marker='^', linestyle=':', color=color_sequence[0])
-    plt.plot(np.mean(mol_best, axis=0), label='Mol.networking score', linewidth=1, markersize=12, 
-             marker='v', linestyle=':', color=color_sequence[1])
-    for k, method in enumerate(similarity_method):
-        plt.plot(np.mean(spec_best[:,:,k], axis=0), label='Spectrum similarity ('+method, linewidth=1, markersize=12,
-                 marker='o', linestyle=':', color=color_sequence[2+k])
-    plt.legend(fontsize = 14)
+    fig, ax = plt.subplots(figsize=(10,16))
+    plt.subplot(211)
+    for i, label in enumerate(labels):
+        plt.plot(np.arange(0,num_candidates), avg_best_scores[i], 
+                 label=label, linewidth=1, markersize=12,
+                 marker=markers[min(i,len(markers)-1)], linestyle=':', color=color_sequence[i])
     
-    fig, ax = plt.subplots(figsize=(10,8))
-    plt.plot(np.arange(1,num_candidates), np.mean(mol_best, axis=0)[1:]/np.mean(tanimoto_best, axis=0)[1:], 
-             label='Mol.networking score/Tanimoto max', linewidth=1, markersize=12,
-             marker='v', linestyle=':', color=color_sequence[1])
-    for k, method in enumerate(similarity_method):
-        plt.plot(np.arange(1,num_candidates), np.mean(spec_best[:,:,k], axis=0)[1:]/np.mean(tanimoto_best, axis=0)[1:], 
-                 label='Spectrum similarity (' + method + ')/Tanimoto max', linewidth=1, markersize=12,
-                 marker='o', linestyle=':', color=color_sequence[2+k])
-    plt.legend(fontsize = 14)
+    # Add mean Tanimoto baseline
+    plt.plot(np.arange(0,num_candidates), np.mean(tanimoto_sim)*np.ones((num_candidates)),
+             label='Average Tanimoto similarity', linewidth=2, color='black')    
+
+    plt.legend(fontsize = 12)
+    plt.xticks(range(0, num_candidates), fontsize=12)
+    plt.xlabel("Top 'x' candidates")
+    plt.ylabel("Average Tanimoto score.")
+    
+#    fig, ax = plt.subplots(figsize=(10,8))
+    plt.subplot(212)
+    for i, label in enumerate(labels[1:], start=1):
+        plt.plot(np.arange(1,num_candidates), avg_best_scores[i][1:]/avg_best_scores[0][1:], 
+                 label=label+'/Tanimoto max', linewidth=1, markersize=12,
+                 marker=markers[min(i,len(markers)-1)], linestyle=':', color=color_sequence[i])
+
+    # Add mean Tanimoto baseline
+    plt.plot(np.arange(1,num_candidates), np.mean(tanimoto_sim)*np.ones((num_candidates-1))/avg_best_scores[0][1:],
+             label='Baseline: random candidate selection', linewidth=2, color='black')  
+    
+    plt.legend(fontsize = 12)
     plt.xticks(range(1, num_candidates), fontsize=12)
     plt.xlabel("Top 'x' candidates")
     plt.ylabel("Fraction of max. possible average Tanimoto score")
     
     if filename is not None:
         plt.savefig(filename, dpi=600)
-    
-    return mol_best, spec_best, tanimoto_best
