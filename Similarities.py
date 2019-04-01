@@ -83,7 +83,8 @@ class SimilarityMeasures():
         self.list_similars_d2v_idx = None
 
 
-    def preprocess_documents(self, max_fraction, remove_stopwords = None, create_stopwords = False):
+    def preprocess_documents(self, max_fraction, min_frequency, 
+                             remove_stopwords = None, create_stopwords = False):
         """ Preprocess 'documents'
         
         Obvious steps: 
@@ -103,10 +104,10 @@ class SimilarityMeasures():
         print("Preprocess documents...")
         if remove_stopwords is None:
             self.corpus, frequency = functions.preprocess_document(self.initial_documents, 
-                                                                       stopwords = [], min_frequency = 2)
+                                                                       stopwords = [], min_frequency = min_frequency)
         else:
             self.corpus, frequency = functions.preprocess_document(self.initial_documents, 
-                                                                       stopwords = remove_stopwords, min_frequency = 2)    
+                                                                       stopwords = remove_stopwords, min_frequency = min_frequency)    
         
         # Create dictionary (or "vocabulary") containting all unique words from documents
         self.dictionary = corpora.Dictionary(self.corpus)
@@ -124,7 +125,7 @@ class SimilarityMeasures():
                   len(self.dictionary), " words in the entire corpus.")
             
             # Create corpus, dictionary, and BOW corpus
-            self.corpus, frequency = functions.preprocess_document(self.corpus, self.stopwords, min_frequency = 2)
+            self.corpus, frequency = functions.preprocess_document(self.corpus, self.stopwords, min_frequency = min_frequency)
             
         self.bow_corpus = [self.dictionary.doc2bow(text) for text in self.corpus]
 
