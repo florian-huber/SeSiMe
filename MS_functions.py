@@ -637,7 +637,7 @@ def create_subspectra_documents(spectra, num_decimals,
             losses = losses[keep_idx,:]
         else:
             print("No losses detected for: ", spec_id, spectrum.id)
-        peaks = np.array(spectrum.peaks)
+        peaks = np.array(spectrum.peaks).astype(float)
         
         # Sort peaks and losses by m/z 
         peaks = peaks[np.lexsort((peaks[:,1], peaks[:,0])),:]
@@ -645,9 +645,10 @@ def create_subspectra_documents(spectra, num_decimals,
             losses = losses[np.lexsort((losses[:,1], losses[:,0])),:]
             
         # Normalize intensities
-        peaks[:,1] = peaks[:,1]/np.max(peaks[:,1])  
+        max_peak_intens = np.max(peaks[:,1])
+        peaks[:,1] = peaks[:,1]/max_peak_intens
         if len(losses) > 0:
-            losses[:,1] = losses[:,1]/np.max(peaks[:,1])  
+            losses[:,1] = losses[:,1]/max_peak_intens 
         
         # Identify main peaks for createing sub-spectra:
         main_peak_idx = np.where(peaks[:,1] > main_peak_cutoff)[0]
@@ -675,11 +676,13 @@ def create_subspectra_documents(spectra, num_decimals,
         # Create document from whole spectra
         for i in range(len(peaks)):
             doc.append("peak_" + "{:.{}f}".format(peaks[i,0], num_decimals))
-            doc_intensity.append(int(peaks[i,1]))
+            doc_intensity.append(peaks[i,1])
+#            doc_intensity.append(int(peaks[i,1]))
             
         for i in range(len(losses)):
             doc.append("loss_"  + "{:.{}f}".format(losses[i,0], num_decimals))
-            doc_intensity.append(int(losses[i,1]))
+            doc_intensity.append(losses[i,1])
+#            doc_intensity.append(int(losses[i,1]))
 
         MS_documents.append(doc)
         MS_documents_intensity.append(doc_intensity)
@@ -693,12 +696,14 @@ def create_subspectra_documents(spectra, num_decimals,
             subdoc_intensity = []
             for i in range(len(sub_peaks)):
                 subdoc.append("peak_" + "{:.{}f}".format(sub_peaks[i,0], num_decimals))
-                subdoc_intensity.append(int(sub_peaks[i,1]))
+                subdoc_intensity.append(sub_peaks[i,1])
+#                subdoc_intensity.append(int(sub_peaks[i,1]))
     
             sub_losses = sub_losses_lst[m]
             for i in range(len(sub_losses)):
                 subdoc.append("loss_"  + "{:.{}f}".format(sub_losses[i,0], num_decimals))
-                subdoc_intensity.append(int(sub_losses[i,1]))
+                subdoc_intensity.append(sub_losses[i,1])
+#                subdoc_intensity.append(int(sub_losses[i,1]))
             
             if len(subdoc) >= min_words:
                 MS_documents.append(subdoc)
