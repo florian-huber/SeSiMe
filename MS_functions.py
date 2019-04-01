@@ -15,6 +15,7 @@ import numpy as np
 from scipy.optimize import curve_fit
 from scipy.optimize import linear_sum_assignment
 import random
+import pandas as pd
 
 from rdkit import DataStructs
 from rdkit.Chem.Fingerprints import FingerprintMols
@@ -264,7 +265,10 @@ def process_peaks(peaks, min_frag, max_frag,
     intensity_thres = np.max(peaks[:,1]) * min_intensity_perc/100
     keep_idx = np.where((peaks[:,0] > min_frag) & (peaks[:,0] < max_frag) & (peaks[:,1] > intensity_thres))[0]
     if (len(keep_idx) < min_peaks):
-        peaks = peaks[np.lexsort((peaks[:,0], peaks[:,1])),:][-min(min_peaks, len(peaks)):]
+        # if not enough peaks selected, try again without intensity threshold
+        keep_idx2 = np.where((peaks[:,0] > min_frag) & (peaks[:,0] < max_frag))[0]
+        peaks = peaks[keep_idx2,:]
+#        peaks = peaks[np.lexsort((peaks[:,0], peaks[:,1])),:][-min(min_peaks, len(peaks)):]  # former way --> problem: leads to peaks >max_frag
     else:
         peaks = peaks[keep_idx,:]
 
@@ -415,7 +419,8 @@ def load_MGF_data(path_json,
                  min_loss = 10.0, max_loss = 200.0,
                  exp_intensity_filter = 0.01,
                  min_peaks = 10,
-                 peaks_per_mz = 20/200):        
+                 peaks_per_mz = 20/200,
+                 sub_spectra = False):        
     """ Collect spectra from MGF file
     Partly taken from ms2ldaviz.
     Prototype. Needs to be replaces by more versatile parser, accepting more MS data formats.
@@ -432,6 +437,7 @@ def load_MGF_data(path_json,
     if results_file is not None:
         try: 
             spectra_dict = functions.json_to_dict(path_json + results_file)
+            sub_spectra_metadata = pd.read_csv(path_json + results_file[:-5] + "_metadata.csv")
             print("Spectra json file found and loaded.")
             spectra = dict_to_spectrum(spectra_dict)
             collect_new_data = False
@@ -485,7 +491,8 @@ def load_MGF_data(path_json,
             spectrum.get_losses
 
             # Calculate losses:
-            spectrum.get_losses()
+            if len(spectrum.peaks) >= min_peaks: 
+                spectrum.get_losses()
             
             # Collect in form of list of spectrum objects
             spectra.append(spectrum)
@@ -504,11 +511,20 @@ def load_MGF_data(path_json,
             spectra_dict[id] = spec.__dict__
 
         # Create documents from peaks (and losses)
-        MS_documents, MS_documents_intensity = create_MS_documents(spectra, num_decimals,
+        if sub_spectra == True:
+            MS_documents, MS_documents_intensity, sub_spectra_metadata = create_subspectra_documents(spectra, num_decimals,
+                                                                               min_loss, max_loss,
+                                                                               main_peak_cutoff = 0.2, min_words = 10)
+        else:
+            MS_documents, MS_documents_intensity, sub_spectra_metadata = create_MS_documents(spectra, num_decimals,
                                                                    min_loss, max_loss)
 
         # Save collected data
         if collect_new_data == True:
+            if sub_spectra == True:
+                sub_spectra_metadata.to_csv(path_json + results_file[:-5] + "_metadata.csv", index=False)
+            else:
+                sub_spectra_metadata = []
             
             functions.dict_to_json(spectra_dict, path_json + results_file)     
             # Store documents
@@ -520,7 +536,7 @@ def load_MGF_data(path_json,
                 for s in MS_documents_intensity:
                     f.write(str(s) +"\n")
 
-    return spectra, spectra_dict, MS_documents, MS_documents_intensity
+    return spectra, spectra_dict, MS_documents, MS_documents_intensity, sub_spectra_metadata
 
 
 ## --------------------------------------------------------------------------------------------------
@@ -548,6 +564,7 @@ def create_MS_documents(spectra, num_decimals,
     """
     MS_documents = []
     MS_documents_intensity = []
+    spectra_metadata = pd.DataFrame(columns=['doc_ID', 'spectrum_ID', 'sub_ID', 'parent_mz', 'parent_intensity', 'no_peaks_losses'])
     
     for i, spectrum in enumerate(spectra):
         doc = []
@@ -578,8 +595,118 @@ def create_MS_documents(spectra, num_decimals,
 
         MS_documents.append(doc)
         MS_documents_intensity.append(doc_intensity)
+        spectra_metadata.loc[i] = [i, i, 0, spectrum.parent_mz, 1, len(doc)]
          
-    return MS_documents, MS_documents_intensity
+    return MS_documents, MS_documents_intensity, spectra_metadata
+
+
+def create_subspectra_documents(spectra, num_decimals, 
+                                min_loss = 10.0, max_loss = 200.0,
+                                main_peak_cutoff = 0.2,
+                                min_words = 10):
+    """ Create documents from peaks and losses. AND documents for subspectra (from main peaks)
+    
+    Every peak and every loss will be transformed into a WORD.
+    Words then look like this: "peak_100.038" or "loss_59.240" 
+    
+    Args:
+    --------
+    spectra: list
+        List of all spectrum class elements = all spectra to be in corpus
+    num_decimals: int
+        Number of decimals to take into account
+    main_peak_cutoff: float
+    
+    min_loss: float
+        Lower limit of losses to take into account (Default = 10.0).
+    max_loss: float
+        Upper limit of losses to take into account (Default = 200.0).
+    """
+    MS_documents = []
+    MS_documents_intensity = []
+#    sub_spectra_reg = {}
+    sub_spectra_metadata = pd.DataFrame(columns=['doc_ID', 'spectrum_ID', 'sub_ID', 'parent_mz', 'parent_intensity', 'no_peaks_losses'])
+    doc_counter = 0
+    
+    for spec_id, spectrum in enumerate(spectra):
+        doc = []
+        doc_intensity = []
+        losses = np.array(spectrum.losses)
+        if len(losses) > 0: 
+            keep_idx = np.where((losses[:,0] > min_loss) & (losses[:,0] < max_loss))[0]
+            losses = losses[keep_idx,:]
+        else:
+            print("No losses detected for: ", spec_id, spectrum.id)
+        peaks = np.array(spectrum.peaks)
+        
+        # Sort peaks and losses by m/z 
+        peaks = peaks[np.lexsort((peaks[:,1], peaks[:,0])),:]
+        if len(losses) > 0: 
+            losses = losses[np.lexsort((losses[:,1], losses[:,0])),:]
+            
+        # Normalize intensities
+        peaks[:,1] = peaks[:,1]/np.max(peaks[:,1])  
+        if len(losses) > 0:
+            losses[:,1] = losses[:,1]/np.max(peaks[:,1])  
+        
+        # Identify main peaks for createing sub-spectra:
+        main_peak_idx = np.where(peaks[:,1] > main_peak_cutoff)[0]
+#        if peaks[main_peak_idx[-1],0] > spectrum.parent_mz
+        main_peaks = peaks[main_peak_idx,:]
+        
+        sub_peaks_lst = []
+        sub_losses_lst = []
+        if len(main_peaks) > 0:          
+#            sub_spectra_reg[str(spec_id)] = peaks[main_peak_idx,:]
+            for m in range(len(main_peaks)): 
+                sub_peaks = peaks[(peaks[:,0] < main_peaks[m,0]),:]
+                sub_peaks_lst.append(sub_peaks)
+                # Calculate new losses with respect to main peak!
+                sub_losses = sub_peaks
+                sub_losses[:,0] = main_peaks[m,0] - sub_losses[:,0]
+                if len(sub_losses) > 0: 
+                    keep_idx = np.where((sub_losses[:,0] > min_loss) & (sub_losses[:,0] < max_loss))[0]
+                    sub_losses = sub_losses[keep_idx,:]
+                sub_losses_lst.append(sub_losses)
+
+        if (spec_id+1) % 100 == 0 or spec_id == len(spectra)-1:  # show progress
+                print('\r', ' Created documents for ', spec_id+1, ' of ', len(spectra), ' spectra.', end="")
+        
+        # Create document from whole spectra
+        for i in range(len(peaks)):
+            doc.append("peak_" + "{:.{}f}".format(peaks[i,0], num_decimals))
+            doc_intensity.append(int(peaks[i,1]))
+            
+        for i in range(len(losses)):
+            doc.append("loss_"  + "{:.{}f}".format(losses[i,0], num_decimals))
+            doc_intensity.append(int(losses[i,1]))
+
+        MS_documents.append(doc)
+        MS_documents_intensity.append(doc_intensity)
+        sub_spectra_metadata.loc[doc_counter] = [doc_counter, spec_id, 0, spectrum.parent_mz, 1, len(doc)]
+        doc_counter += 1
+        
+        
+        # Create document from sub-spectra
+        for m, sub_peaks in enumerate(sub_peaks_lst):
+            subdoc = []
+            subdoc_intensity = []
+            for i in range(len(sub_peaks)):
+                subdoc.append("peak_" + "{:.{}f}".format(sub_peaks[i,0], num_decimals))
+                subdoc_intensity.append(int(sub_peaks[i,1]))
+    
+            sub_losses = sub_losses_lst[m]
+            for i in range(len(sub_losses)):
+                subdoc.append("loss_"  + "{:.{}f}".format(sub_losses[i,0], num_decimals))
+                subdoc_intensity.append(int(sub_losses[i,1]))
+            
+            if len(subdoc) >= min_words:
+                MS_documents.append(subdoc)
+                MS_documents_intensity.append(subdoc_intensity)
+                sub_spectra_metadata.loc[doc_counter] = [doc_counter, spec_id, m+1, main_peaks[m,0], main_peaks[m,1], len(subdoc)] #sub_spectra_reg[str(i)][m,0]]
+                doc_counter += 1
+         
+    return MS_documents, MS_documents_intensity, sub_spectra_metadata
 
 
 
@@ -829,11 +956,12 @@ def fast_cosine_shift(spectrum1, spectrum2, tol, min_match, min_intens = 0):
             used1.add(m[0])
             used2.add(m[1])
             used_matches.append(m)
+    
     if len(used_matches) < min_match:
         score = 0.0
-        
-    # Normalize score:
-    score = score/max(np.sum(spec1[:,1]**2), np.sum(spec2[:,1]**2))
+    else:     
+        # Normalize score:
+        score = score/max(np.sum(spec1[:,1]**2), np.sum(spec2[:,1]**2))
     
     return score #, used_matches
 
@@ -1424,8 +1552,8 @@ def plot_best_results(avg_best_scores,
 
     # These are the colors that will be used in the plot
     color_sequence = ['#003f5c','#882556', '#D65113', '#ffa600', '#58508d', '#bc5090', 
-                      '#ff6361', '#2651d1', '#2f4b7c', '#a05195', '#d45087'] 
-    markers = ['^', 'v', 'o']
+                      '#2651d1', '#2f4b7c', '#ff6361', '#a05195', '#d45087'] 
+    markers = ['^', 'v', 'o']#, 'v']
                       
     fig, ax = plt.subplots(figsize=(10,16))
     plt.subplot(211)
