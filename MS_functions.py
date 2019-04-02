@@ -544,7 +544,7 @@ def load_MGF_data(path_json,
 ## --------------------------------------------------------------------------------------------------
 
 
-def create_MS_documents(spectra, num_decimals,
+def create_MS_documents(spectra, num_decimals, peak_loss_words = ['peak_', 'loss_'],
                         min_loss = 10.0, max_loss = 200.0):
     """ Create documents from peaks and losses.
     
@@ -586,11 +586,11 @@ def create_MS_documents(spectra, num_decimals,
                 print('\r', ' Created documents for ', i+1, ' of ', len(spectra), ' spectra.', end="")
                 
         for i in range(len(peaks)):
-            doc.append("peak_" + "{:.{}f}".format(peaks[i,0], num_decimals))
+            doc.append(peak_loss_words[0] + "{:.{}f}".format(peaks[i,0], num_decimals))
             doc_intensity.append(int(peaks[i,1]))
             
         for i in range(len(losses)):
-            doc.append("loss_"  + "{:.{}f}".format(losses[i,0], num_decimals))
+            doc.append(peak_loss_words[1]  + "{:.{}f}".format(losses[i,0], num_decimals))
             doc_intensity.append(int(losses[i,1]))
 
         MS_documents.append(doc)
