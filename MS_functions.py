@@ -420,6 +420,7 @@ def load_MGF_data(path_json,
                  exp_intensity_filter = 0.01,
                  min_peaks = 10,
                  peaks_per_mz = 20/200,
+                 peak_loss_words = ['peak_', 'loss_'],
                  sub_spectra = False):        
     """ Collect spectra from MGF file
     Partly taken from ms2ldaviz.
@@ -516,15 +517,13 @@ def load_MGF_data(path_json,
                                                                                min_loss, max_loss,
                                                                                main_peak_cutoff = 0.2, min_words = 10)
         else:
-            MS_documents, MS_documents_intensity, sub_spectra_metadata = create_MS_documents(spectra, num_decimals,
-                                                                   min_loss, max_loss)
+            MS_documents, MS_documents_intensity, sub_spectra_metadata = create_MS_documents(spectra, num_decimals, 
+                                                                                             peak_loss_words, 
+                                                                                             min_loss, max_loss)
 
         # Save collected data
         if collect_new_data == True:
-            if sub_spectra == True:
-                sub_spectra_metadata.to_csv(path_json + results_file[:-5] + "_metadata.csv", index=False)
-            else:
-                sub_spectra_metadata = []
+            sub_spectra_metadata.to_csv(path_json + results_file[:-5] + "_metadata.csv", index=False)
             
             functions.dict_to_json(spectra_dict, path_json + results_file)     
             # Store documents
@@ -566,7 +565,7 @@ def create_MS_documents(spectra, num_decimals, peak_loss_words = ['peak_', 'loss
     MS_documents_intensity = []
     spectra_metadata = pd.DataFrame(columns=['doc_ID', 'spectrum_ID', 'sub_ID', 'parent_mz', 'parent_intensity', 'no_peaks_losses'])
     
-    for i, spectrum in enumerate(spectra):
+    for spec_id, spectrum in enumerate(spectra):
         doc = []
         doc_intensity = []
         losses = np.array(spectrum.losses)
@@ -574,7 +573,7 @@ def create_MS_documents(spectra, num_decimals, peak_loss_words = ['peak_', 'loss
             keep_idx = np.where((losses[:,0] > min_loss) & (losses[:,0] < max_loss))[0]
             losses = losses[keep_idx,:]
         else:
-            print("No losses detected for: ", i, spectrum.id)
+            print("No losses detected for: ", spec_id, spectrum.id)
         peaks = np.array(spectrum.peaks)
         
         # Sort peaks and losses by m/z 
@@ -582,8 +581,8 @@ def create_MS_documents(spectra, num_decimals, peak_loss_words = ['peak_', 'loss
         if len(losses) > 0: 
             losses = losses[np.lexsort((losses[:,1], losses[:,0])),:]
 
-        if (i+1) % 100 == 0 or i == len(spectra)-1:  # show progress
-                print('\r', ' Created documents for ', i+1, ' of ', len(spectra), ' spectra.', end="")
+        if (spec_id+1) % 100 == 0 or spec_id == len(spectra)-1:  # show progress
+                print('\r', ' Created documents for ', spec_id+1, ' of ', len(spectra), ' spectra.', end="")
                 
         for i in range(len(peaks)):
             doc.append(peak_loss_words[0] + "{:.{}f}".format(peaks[i,0], num_decimals))
@@ -595,7 +594,7 @@ def create_MS_documents(spectra, num_decimals, peak_loss_words = ['peak_', 'loss
 
         MS_documents.append(doc)
         MS_documents_intensity.append(doc_intensity)
-        spectra_metadata.loc[i] = [i, i, 0, spectrum.parent_mz, 1, len(doc)]
+        spectra_metadata.loc[i] = [spec_id, int(spectrum.id), 0, spectrum.parent_mz, 1, len(doc)]
          
     return MS_documents, MS_documents_intensity, spectra_metadata
 
@@ -686,7 +685,8 @@ def create_subspectra_documents(spectra, num_decimals,
 
         MS_documents.append(doc)
         MS_documents_intensity.append(doc_intensity)
-        sub_spectra_metadata.loc[doc_counter] = [doc_counter, spec_id, 0, spectrum.parent_mz, 1, len(doc)]
+#        sub_spectra_metadata.loc[doc_counter] = [doc_counter, spec_id, 0, spectrum.parent_mz, 1, len(doc)]
+        sub_spectra_metadata.loc[doc_counter] = [doc_counter, int(spectrum.id), 0, spectrum.parent_mz, 1, len(doc)]
         doc_counter += 1
         
         
