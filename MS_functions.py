@@ -594,7 +594,7 @@ def create_MS_documents(spectra, num_decimals, peak_loss_words = ['peak_', 'loss
 
         MS_documents.append(doc)
         MS_documents_intensity.append(doc_intensity)
-        spectra_metadata.loc[i] = [spec_id, int(spectrum.id), 0, spectrum.parent_mz, 1, len(doc)]
+        spectra_metadata.loc[spec_id] = [spec_id, int(spectrum.id), 0, spectrum.parent_mz, 1, len(doc)]
          
     return MS_documents, MS_documents_intensity, spectra_metadata
 
@@ -719,6 +719,8 @@ def get_mol_similarity(spectra_dict, method = ""):
     """ Calculate molecule similarities based on given smiles.
     (using RDkit)
     
+    Output: exclude_IDs list with spectra that had no smiles or problems when deriving fingerprint
+    
     Args:
     --------
     spectra_dict: dict
@@ -729,6 +731,7 @@ def get_mol_similarity(spectra_dict, method = ""):
     # If spectra is given as a dictionary
     keys = []
     smiles = []
+    exclude_IDs = []
     for key, value in spectra_dict.items():
         if "smiles" in value:
             keys.append(key) 
@@ -736,13 +739,15 @@ def get_mol_similarity(spectra_dict, method = ""):
         else:
             print("No smiles found for spectra ", key, ".")
             smiles.append("H20")  # just have some water when you get stuck
+            exclude_IDs.append(int(value["id"]))
    
     molecules = [Chem.MolFromSmiles(x) for x in smiles]
     fingerprints = []
     for i in range(len(molecules)):
         if molecules[i] is None:
-            print("Problem with molecule ", i)
+            print("Problem with molecule " + spectra_dict[keys[i]]["id"])
             fp = 0
+            exclude_IDs.append(int(spectra_dict[keys[i]]["id"]))
         else:
             fp = FingerprintMols.FingerprintMol(molecules[i])
 
@@ -750,7 +755,7 @@ def get_mol_similarity(spectra_dict, method = ""):
                 
 #    fingerprints = [FingerprintMols.FingerprintMol(x) for x in molecules]
     
-    return molecules, fingerprints
+    return molecules, fingerprints, exclude_IDs
 
 
 def compare_molecule_selection(query_id, spectra_dict, MS_measure, 
@@ -1458,6 +1463,43 @@ def top_score_histogram(spec_sim, mol_sim,
     plt.text(0, 0.96*np.max(n), text1, fontsize=12, backgroundcolor = "white")
     plt.text(0, 0.91*np.max(n), text2, fontsize=12, backgroundcolor = "white")
     plt.text(0, 0.86*np.max(n), text3, fontsize=12, backgroundcolor = "white")
+
+    if filename is not None:
+        plt.savefig(filename, dpi=600)
+    
+    plt.show()
+
+
+def similarity_histogram(M_sim, M_sim_ref, 
+                         score_threshold,
+                         num_bins = 50, 
+                         exclude_IDs = None,
+                         filename = None):
+    """ Plot histogram of Reference scores (from matrix M_sim_ref) for all pairs 
+    with similarity score >= score_threshold. 
+    
+    M_sim: numpy array
+        Matrix with similarities between pairs.
+    M_sim_ref: numpy array
+        Matrix with reference scores/similarity values between pairs.
+    
+    filename: str
+        If not none: save figure to file with given name.
+    """
+    fig, ax = plt.subplots(figsize=(10,10))
+
+    IDs = np.arange(0,M_sim.shape[0])
+    if exclude_IDs is not None:
+        # Remove elements in exclude_IDs array
+        IDs = np.delete(IDs, IDs[exclude_IDs])
+    
+    selection = np.where(M_sim[IDs,IDs] >= score_threshold)
+    X = M_sim_ref[IDs,IDs][selection].reshape(len(selection[0]))
+    n, bins, patches = plt.hist(X, num_bins, weights=np.ones(len(X))/len(X), facecolor='blue', edgecolor='white', alpha=0.9)
+    plt.gca().yaxis.set_major_formatter(PercentFormatter(1))
+    plt.title("Total reference scores for all candidates with similarity score > " + str(score_threshold))
+    plt.xlabel("Reference score.")
+    plt.ylabel("Percentage")
 
     if filename is not None:
         plt.savefig(filename, dpi=600)
