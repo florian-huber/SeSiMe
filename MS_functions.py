@@ -1069,22 +1069,34 @@ def molnet_matrix(spectra,
     """ Create Matrix of all mol.networking similarities.
     Takes some time to calculate, so better only do it once and save as npy.
     """  
-    molnet_sim = np.zeros((len(spectra), len(spectra)))
-    for i in range(len(spectra)):
-        # Show progress
-        if (i+1) % 10 == 0 or i == len(spectra)-1:  
-            print('\r', ' Molnet for spectrum ', i+1, ' of ', len(spectra), ' spectra.', end="")
-    
-        for j in range(i,len(spectra)):
-            molnet_sim[i,j] = fast_cosine_shift(spectra[i], spectra[j], tol, min_match, min_intens = min_intens)
-    
-    # Symmetric matrix --> fill        
-    for i in range(1,len(spectra)):
-        for j in range(i):  
-            molnet_sim[i,j] = molnet_sim[j,i]      
-
     if filename is not None:
-        np.save(filename, molnet_sim)
+        try: 
+            molnet_sim = np.load(filename)
+            print("MolNet similarity scores found and loaded.")
+            collect_new_data = False
+                
+        except FileNotFoundError: 
+            print("Could not find file ", filename) 
+            print("MolNet scores will be calculated from scratch.")
+            collect_new_data = True
+    
+    if collect_new_data == True:      
+        molnet_sim = np.zeros((len(spectra), len(spectra)))
+        for i in range(len(spectra)):
+            # Show progress
+            if (i+1) % 10 == 0 or i == len(spectra)-1:  
+                print('\r', ' Molnet for spectrum ', i+1, ' of ', len(spectra), ' spectra.', end="")
+        
+            for j in range(i,len(spectra)):
+                molnet_sim[i,j] = fast_cosine_shift(spectra[i], spectra[j], tol, min_match, min_intens = min_intens)
+        
+        # Symmetric matrix --> fill        
+        for i in range(1,len(spectra)):
+            for j in range(i):  
+                molnet_sim[i,j] = molnet_sim[j,i]      
+    
+        if filename is not None:
+            np.save(filename, molnet_sim)
             
     return molnet_sim
 
@@ -1095,23 +1107,36 @@ def tanimoto_matrix(spectra,
     """ Create Matrix of all Tanimoto molecule similarities (based on annotated SMILES).
     Takes some time to calculate, so better only do it once and save as npy.
     """  
-    tanimoto_similarities = np.zeros((len(spectra), len(spectra)))
-    for i in range(len(spectra)):
-        # Show progress
-        if (i+1) % 10 == 0 or i == len(spectra)-1:  
-            print('\r', ' Tanimoto for spectrum ', i+1, ' of ', len(spectra), ' spectra.', end="")
-        if fingerprints[i] != 0:
-            for j in range(i,len(spectra)):
-                if fingerprints[j] != 0: 
-                    tanimoto_similarities[i,j] = DataStructs.FingerprintSimilarity(fingerprints[i], fingerprints[j])
     
-    # Symmetric matrix --> fill        
-    for i in range(1,len(spectra)):
-        for j in range(i):  
-            tanimoto_similarities[i,j] = tanimoto_similarities[j,i]   
-
     if filename is not None:
-        np.save(filename, tanimoto_similarities)
+        try: 
+            tanimoto_similarities = np.load(filename)
+            print("Tanimoto similarity scores found and loaded.")
+            collect_new_data = False
+                
+        except FileNotFoundError: 
+            print("Could not find file ", filename) 
+            print("Tanimoto scores will be calculated from scratch.")
+            collect_new_data = True
+    
+    if collect_new_data == True:      
+        tanimoto_similarities = np.zeros((len(spectra), len(spectra)))
+        for i in range(len(spectra)):
+            # Show progress
+            if (i+1) % 10 == 0 or i == len(spectra)-1:  
+                print('\r', ' Tanimoto for spectrum ', i+1, ' of ', len(spectra), ' spectra.', end="")
+            if fingerprints[i] != 0:
+                for j in range(i,len(spectra)):
+                    if fingerprints[j] != 0: 
+                        tanimoto_similarities[i,j] = DataStructs.FingerprintSimilarity(fingerprints[i], fingerprints[j])
+        
+        # Symmetric matrix --> fill        
+        for i in range(1,len(spectra)):
+            for j in range(i):  
+                tanimoto_similarities[i,j] = tanimoto_similarities[j,i]   
+    
+        if filename is not None:
+            np.save(filename, tanimoto_similarities)
 
     return tanimoto_similarities
 
