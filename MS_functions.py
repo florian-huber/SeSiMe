@@ -1499,7 +1499,8 @@ def similarity_histogram(M_sim, M_sim_ref,
                          score_threshold,
                          num_bins = 50, 
                          exclude_IDs = None,
-                         filename = None):
+                         filename = None,
+                         exclude_diagonal = True):
     """ Plot histogram of Reference scores (from matrix M_sim_ref) for all pairs 
     with similarity score >= score_threshold. 
     
@@ -1512,14 +1513,23 @@ def similarity_histogram(M_sim, M_sim_ref,
         If not none: save figure to file with given name.
     """
     fig, ax = plt.subplots(figsize=(10,10))
-
-    IDs = np.arange(0,M_sim.shape[0])
+    
     if exclude_IDs is not None:
         # Remove elements in exclude_IDs array
+        IDs = np.arange(0,M_sim.shape[0])
+        M_sim = np.delete(M_sim, IDs[exclude_IDs], axis=0)
+        M_sim = np.delete(M_sim, IDs[exclude_IDs], axis=1)
+        M_sim_ref = np.delete(M_sim_ref, IDs[exclude_IDs], axis=0)
+        M_sim_ref = np.delete(M_sim_ref, IDs[exclude_IDs], axis=1)
+        
         IDs = np.delete(IDs, IDs[exclude_IDs])
+        
+    if exclude_diagonal == True:
+        # Exclude diagonal
+        M_sim[np.arange(0,M_sim.shape[0]), np.arange(0,M_sim.shape[0])] = score_threshold - 1
     
-    selection = np.where(M_sim[IDs,IDs] >= score_threshold)
-    X = M_sim_ref[IDs,IDs][selection].reshape(len(selection[0]))
+    selection = np.where(M_sim[:,:] >= score_threshold)
+    X = M_sim_ref[selection].reshape(len(selection[0]))
     n, bins, patches = plt.hist(X, num_bins, weights=np.ones(len(X))/len(X), facecolor='blue', edgecolor='white', alpha=0.9)
     plt.gca().yaxis.set_major_formatter(PercentFormatter(1))
     plt.title("Total reference scores for all candidates with similarity score > " + str(score_threshold))
@@ -1531,6 +1541,7 @@ def similarity_histogram(M_sim, M_sim_ref,
     
     plt.show()
 
+    return n, bins
 
 
 def compare_best_results(spectra_dict, 
