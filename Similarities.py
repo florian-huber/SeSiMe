@@ -165,7 +165,7 @@ class SimilarityMeasures():
             self.model_word2vec.save(file_model_word2vec)
 
 
-    def build_model_doc2vec(self, file_model_doc2vec, dm=0, vector_size=100, window=50, 
+    def build_model_doc2vec(self, file_model_doc2vec, vector_size=100, window=50, 
                              min_count=1, workers=4, epochs=250, use_stored_model=True):
         """ Build Doc2Vec model (using gensim)
         """
@@ -186,7 +186,7 @@ class SimilarityMeasures():
             # Set up GENSIM logging
             logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.WARNING)
             
-            self.model_doc2vec = gensim.models.Doc2Vec(documents, vector_size=vector_size, 
+            self.model_doc2vec = gensim.models.Doc2Vec(documents, dm=0, vector_size=vector_size, 
                                     window=window, min_count=min_count, 
                                     workers=workers, epochs=epochs,
                                     seed=42, callbacks=[epoch_logger])
