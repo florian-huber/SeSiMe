@@ -159,17 +159,19 @@ class SimilarityMeasures():
             self.model_word2vec = gensim.models.Word2Vec(self.corpus, size=size,
                                                          window=window, min_count=min_count, 
                                                          workers=workers, iter=iter, 
-                                                         seed=42, callbacks=[epoch_logger])
+                                                         )
             
             # Save model
             self.model_word2vec.save(file_model_word2vec)
 
 
-    def build_model_doc2vec(self, file_model_doc2vec, vector_size=100, window=50, 
+    def build_model_doc2vec(self, file_model_doc2vec, dm=0, vector_size=100, window=50, 
                              min_count=1, workers=4, epochs=250, use_stored_model=True):
         """ Build Doc2Vec model (using gensim)
         """
         from gensim.models.doc2vec import TaggedDocument
+        
+        epoch_logger = EpochLogger(iter)
         
         # Check if model already exists and should be loaded
         if os.path.isfile(file_model_doc2vec) and use_stored_model:   
@@ -180,9 +182,14 @@ class SimilarityMeasures():
                 print("Stored doc2vec model not found!")
             documents = [TaggedDocument(doc, [i]) for i, doc in enumerate(self.corpus)]
             print("Calculating new doc2vec model...")
+            
+            # Set up GENSIM logging
+            logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.WARNING)
+            
             self.model_doc2vec = gensim.models.Doc2Vec(documents, vector_size=vector_size, 
                                     window=window, min_count=min_count, 
-                                    workers=workers, epochs=epochs)
+                                    workers=workers, epochs=epochs,
+                                    seed=42, callbacks=[epoch_logger])
             
             # Save model
             self.model_doc2vec.save(file_model_doc2vec)
