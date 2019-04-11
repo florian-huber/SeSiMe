@@ -83,7 +83,10 @@ class Spectrum(object):
         self.min_loss = min_loss
         self.max_loss = max_loss
         self.min_intensity_perc = min_intensity_perc
-        self.exp_intensity_filter = exp_intensity_filter
+        if exp_intensity_filter == 0:
+            self.exp_intensity_filter = None
+        else:
+            self.exp_intensity_filter = exp_intensity_filter
         self.min_peaks = min_peaks
         self.merge_energies = merge_energies
         self.merge_ppm = merge_ppm
@@ -417,6 +420,7 @@ def load_MGF_data(path_json,
                  num_decimals = 3,
                  min_frag = 0.0, max_frag = 1000.0,
                  min_loss = 10.0, max_loss = 200.0,
+                 min_intensity_perc = 0.0,
                  exp_intensity_filter = 0.01,
                  min_peaks = 10,
                  peaks_per_mz = 20/200,
@@ -483,7 +487,7 @@ def load_MGF_data(path_json,
                                 max_frag = max_frag,
                                 min_loss = min_loss, 
                                 max_loss = max_loss,
-                                min_intensity_perc = 0,
+                                min_intensity_perc = min_intensity_perc,
                                 exp_intensity_filter = exp_intensity_filter,
                                 min_peaks = min_peaks_scaled)
             
