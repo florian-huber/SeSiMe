@@ -171,7 +171,7 @@ class SimilarityMeasures():
         """
         from gensim.models.doc2vec import TaggedDocument
         
-        epoch_logger = EpochLogger(iter)
+        epoch_logger = EpochLogger(epochs)
         
         # Check if model already exists and should be loaded
         if os.path.isfile(file_model_doc2vec) and use_stored_model:   
