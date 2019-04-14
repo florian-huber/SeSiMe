@@ -136,9 +136,26 @@ class SimilarityMeasures():
 ## 
     def build_model_word2vec(self, file_model_word2vec, size=100, 
                              window=50, min_count=1, workers=4, 
-                             iter=250, use_stored_model=True):
+                             iter=100, use_stored_model=True):
         """ Build Word2Vec model (using gensim)
-        TODO: show progress along epochs/iter
+        
+        Args:
+        --------
+        file_model_word2vec: str,
+            Filename to save model (or load model if it exists under this name).
+        size: int,
+            Dimensions of word vectors (default = 100) 
+        window: int,
+            Window size for context words (small for local context, 
+            larger for global context, default = 50)
+        min_count: int,
+            Only consider words that occur at least min_count times in the corpus (default =1).
+        workers: int,
+            Number of threads to run the training on (should not be more than number of cores/threads, default = 4).
+        iter: int,
+            Number of training iterations (default=100). 
+        use_stored_model: bool,
+            Load stored model if True, else train new model.
         """
         
         epoch_logger = EpochLogger(iter)
@@ -158,16 +175,34 @@ class SimilarityMeasures():
             # Train word2vec model
             self.model_word2vec = gensim.models.Word2Vec(self.corpus, size=size,
                                                          window=window, min_count=min_count, 
-                                                         workers=workers, iter=iter, 
-                                                         )
+                                                         workers=workers, iter=iter,
+                                                         seed=42, callbacks=[epoch_logger])
             
             # Save model
             self.model_word2vec.save(file_model_word2vec)
 
 
     def build_model_doc2vec(self, file_model_doc2vec, vector_size=100, window=50, 
-                             min_count=1, workers=4, epochs=250, use_stored_model=True):
+                             min_count=1, workers=4, epochs=100, use_stored_model=True):
         """ Build Doc2Vec model (using gensim)
+        
+        Args:
+        --------
+        file_model_doc2vec: str,
+            Filename to save model (or load model if it exists under this name).
+        vector_size: int,
+            Dimensions of word vectors (default = 100) 
+        window: int,
+            Window size for context words (small for local context, 
+            larger for global context, default = 50)
+        min_count: int,
+            Only consider words that occur at least min_count times in the corpus (default =1).
+        workers: int,
+            Number of threads to run the training on (should not be more than number of cores/threads, default = 4).
+        epochs: int,
+            Number of training iterations (default=100). 
+        use_stored_model: bool,
+            Load stored model if True, else train new model.
         """
         from gensim.models.doc2vec import TaggedDocument
         
@@ -186,6 +221,7 @@ class SimilarityMeasures():
             # Set up GENSIM logging
             logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.WARNING)
             
+            # dm = 0 is for bag-of-words 
             self.model_doc2vec = gensim.models.Doc2Vec(documents, dm=0, vector_size=vector_size, 
                                     window=window, min_count=min_count, 
                                     workers=workers, epochs=epochs,
