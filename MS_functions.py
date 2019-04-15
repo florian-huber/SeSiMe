@@ -1395,7 +1395,7 @@ from rdkit.Chem import Draw
 
 def plot_smiles(query_id, spectra, MS_measure, num_candidates = 10,
                    sharex=True, labels=False, similarity_method = "centroid",
-                   plot_type = "single"):
+                   plot_type = "single", molnet_sim = None):
     """ Plot molecules for closest candidates
     
     """
@@ -1403,22 +1403,29 @@ def plot_smiles(query_id, spectra, MS_measure, num_candidates = 10,
     # Select chosen similarity methods
     if similarity_method == "centroid":
         candidates_idx = MS_measure.list_similars_ctr_idx[query_id, :num_candidates]
-        candidates_dist = MS_measure.list_similars_ctr[query_id, :num_candidates]
+        candidates_sim = MS_measure.list_similars_ctr[query_id, :num_candidates]
     elif similarity_method == "pca":
         candidates_idx = MS_measure.list_similars_pca_idx[query_id, :num_candidates]
-        candidates_dist = MS_measure.list_similars_pca[query_id, :num_candidates]
+        candidates_sim = MS_measure.list_similars_pca[query_id, :num_candidates]
     elif similarity_method == "autoencoder":
         candidates_idx = MS_measure.list_similars_ae_idx[query_id, :num_candidates]
-        candidates_dist = MS_measure.list_similars_ae[query_id, :num_candidates]
+        candidates_sim = MS_measure.list_similars_ae[query_id, :num_candidates]
     elif similarity_method == "lda":
         candidates_idx = MS_measure.list_similars_lda_idx[query_id, :num_candidates]
-        candidates_dist = MS_measure.list_similars_lda[query_id, :num_candidates]
+        candidates_sim = MS_measure.list_similars_lda[query_id, :num_candidates]
     elif similarity_method == "lsi":
         candidates_idx = MS_measure.list_similars_lsi_idx[query_id, :num_candidates]
-        candidates_dist = MS_measure.list_similars_lsi[query_id, :num_candidates]
+        candidates_sim = MS_measure.list_similars_lsi[query_id, :num_candidates]
     elif similarity_method == "doc2vec":
         candidates_idx = MS_measure.list_similars_d2v_idx[query_id, :num_candidates]
-        candidates_dist = MS_measure.list_similars_d2v[query_id, :num_candidates]
+        candidates_sim = MS_measure.list_similars_d2v[query_id, :num_candidates]
+    elif similarity_method == "molnet":
+        if molnet_sim is None:
+            print("If 'molnet' is chosen as similarity measure, molnet-matrix needs to be provided.")
+            print("Use molnet_matrix function.")
+        else:
+            candidates_idx = molnet_sim[query_id,:].argsort()[-num_candidates:][::-1]
+            candidates_sim = molnet_sim[query_id, candidates_idx]
     else:
         print("Chosen similarity measuring method not found.")
 
