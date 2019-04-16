@@ -1576,9 +1576,11 @@ def similarity_histogram(M_sim, M_sim_ref,
     X = M_sim_ref[selection].reshape(len(selection[0]))
     n, bins, patches = plt.hist(X, num_bins, weights=np.ones(len(X))/len(X), facecolor='blue', edgecolor='white', alpha=0.9)
     plt.gca().yaxis.set_major_formatter(PercentFormatter(1))
-    plt.title("Total reference scores for all candidates with similarity score > " + str(score_threshold))
-    plt.xlabel("Reference score.")
-    plt.ylabel("Percentage")
+    plt.title("Total reference scores for all candidates with similarity score > " + str(score_threshold), fontsize = 16)
+#    plt.set_xticklabels(rotation=0, fontsize=12)
+    ax.tick_params(labelsize=12)   
+    plt.xlabel("Reference score.", fontsize = 14)
+    plt.ylabel("Percentage", fontsize = 14)
 
     if filename is not None:
         plt.savefig(filename, dpi=600)
