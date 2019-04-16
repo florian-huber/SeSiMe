@@ -19,6 +19,7 @@ import pandas as pd
 
 from rdkit import DataStructs
 from rdkit.Chem.Fingerprints import FingerprintMols
+from rdkit.Chem import AllChem
 
 ## --------------------------------------------------------------------------------------------------
 ## ---------------------------- Spectrum class ------------------------------------------------------
@@ -719,8 +720,8 @@ def create_subspectra_documents(spectra, num_decimals,
 
 
 
-def get_mol_similarity(spectra_dict, method = ""):
-    """ Calculate molecule similarities based on given smiles.
+def get_mol_fingerprints(spectra_dict, method = "daylight"):
+    """ Calculate molecule fingerprints based on given smiles.
     (using RDkit)
     
     Output: exclude_IDs list with spectra that had no smiles or problems when deriving fingerprint
@@ -753,7 +754,16 @@ def get_mol_similarity(spectra_dict, method = ""):
             fp = 0
             exclude_IDs.append(int(spectra_dict[keys[i]]["id"]))
         else:
-            fp = FingerprintMols.FingerprintMol(molecules[i])
+            if method == "daylight":
+                fp = FingerprintMols.FingerprintMol(molecules[i])
+            elif method == "morgan1":
+                fp = AllChem.GetMorganFingerprint(molecules[i],1)
+            elif method == "morgan2":
+                fp = AllChem.GetMorganFingerprint(molecules[i],2)
+            elif method == "morgan3":
+                fp = AllChem.GetMorganFingerprint(molecules[i],3)
+            else:
+                print("Unkown fingerprint method given...")
 
         fingerprints.append(fp)
                 
