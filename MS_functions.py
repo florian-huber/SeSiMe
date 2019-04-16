@@ -925,11 +925,22 @@ def evaluate_measure(spectra_dict,
         else:
             print("Chosen similarity measuring method not found.")
 
+        # Check type of fingerprints given as input:
+        try: 
+            DataStructs.FingerprintSimilarity(fingerprints[0], fingerprints[0])
+            fingerprint_type = "daylight" # at least assumed here
+        
+        except AttributeError:
+            fingerprint_type = "morgan" # at least assumed here
+
         # Calculate Tanimoto similarity for selected candidates
         if fingerprints[query_id] != 0:
             for j, cand_id in enumerate(candidates_idx): 
                 if fingerprints[cand_id] != 0:     
-                    mol_sim[i, j] = DataStructs.FingerprintSimilarity(fingerprints[query_id], fingerprints[cand_id])
+                    if fingerprint_type == "daylight":
+                        mol_sim[i, j] = DataStructs.FingerprintSimilarity(fingerprints[query_id], fingerprints[cand_id])
+                    elif fingerprint_type == "morgan":
+                        mol_sim[i, j] = DataStructs.DiceSimilarity(fingerprints[query_id], fingerprints[cand_id])
 
         spec_sim[i,:] = candidates_sim
         spec_idx[i,:] = candidates_idx
@@ -1134,6 +1145,15 @@ def tanimoto_matrix(spectra,
             collect_new_data = True
     
     if collect_new_data == True:      
+        
+        # Check type of fingerprints given as input:
+        try: 
+            DataStructs.FingerprintSimilarity(fingerprints[0], fingerprints[0])
+            fingerprint_type = "daylight" # at least assumed here
+        
+        except AttributeError:
+            fingerprint_type = "morgan" # at least assumed here
+        
         tanimoto_similarities = np.zeros((len(spectra), len(spectra)))
         for i in range(len(spectra)):
             # Show progress
@@ -1142,7 +1162,10 @@ def tanimoto_matrix(spectra,
             if fingerprints[i] != 0:
                 for j in range(i,len(spectra)):
                     if fingerprints[j] != 0: 
-                        tanimoto_similarities[i,j] = DataStructs.FingerprintSimilarity(fingerprints[i], fingerprints[j])
+                        if fingerprint_type == "daylight":
+                            tanimoto_similarities[i,j] = DataStructs.FingerprintSimilarity(fingerprints[i], fingerprints[j])
+                        elif fingerprint_type == "morgan":
+                            tanimoto_similarities[i,j] = DataStructs.DiceSimilarity(fingerprints[i], fingerprints[j])
         
         # Symmetric matrix --> fill        
         for i in range(1,len(spectra)):
