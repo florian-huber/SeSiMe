@@ -14,5 +14,6 @@ Here used to calculate similarities (or distances) between mass spectra or betwe
 | Autoencoder on 1-hot document vector | No | No |
 | Autoencoder on full sequence | (Yes) | (Yes) |
 | Word2Vec + document centroid | Yes | No |
+| GloVe | Yes | No |
 | ELMo, bi-LSTM etc. | Yes | Yes |
 
