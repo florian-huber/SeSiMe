@@ -67,6 +67,7 @@ class SimilarityMeasures():
         self.vectors_centroid = []
         self.vectors_ae = []
         self.vectors_pca = []
+        self.vectors_glove = None
         
         # Listed similarities
         self.list_similars_ctr = None
@@ -430,11 +431,11 @@ class SimilarityMeasures():
             self.model_glove.add_dictionary(corpus.dictionary)
             
             # Save model
-            self.model_glove.save('glove.model')
+            self.model_glove.save(file_model_glove)
 
  
 ##
-## -------------------- Calculate vectors -------------------------------------
+## -------------------- Calculate document vectors -------------------------------------
 ## 
     def get_vectors_centroid(self, extra_weights = None, tfidf_weighted=True):
         """ Calculate centroid vectors for all documents
@@ -492,6 +493,7 @@ class SimilarityMeasures():
         self.vectors_centroid = np.array(vectors_centroid)
          
 #        # TODO add save and load options
+
         
     def get_vectors_pca(self, dimension):
         """ Calculate PCA vectors for all documents
@@ -513,6 +515,55 @@ class SimilarityMeasures():
 
         self.vectors_pca = pca.fit_transform(self.X_data)
         
+        
+    def get_vectors_glove(self, MS_measure, extra_weights = None, tfidf_weighted=True):
+        """ Calculate GloVe vectors for all documents
+        
+        Individual word vectors are weighted using tfidf (unless weighted=False).
+        
+        Args:
+        --------
+        extra_weights: list
+            List of extra weights for add documents (and every word). Set to "None" if not used.
+        tfidf_weighted: bool
+            True, False
+        """
+        #corpus = MS_measure.corpus  # TODO: use either corpus or bow_corpus, not both
+        vector_size = self.model_glove.no_components
+        vectors_glove = []
+        
+        for i in range(len(self.corpus)):
+            if (i+1) % 10 == 0 or i == len(self.corpus)-1:  # show progress
+                print('\r', ' Calculated GloVe vectors for ', i+1, ' of ', len(self.corpus), ' documents.', end="")
+            
+            document = [self.dictionary[x[0]] for x in self.bow_corpus[i]]
+            if extra_weights is not None:
+                document_weight = [extra_weights[i][self.initial_documents[i].index(self.dictionary[x[0]])] for x in self.bow_corpus[i]]
+                document_weight = np.array(document_weight)
+                if len(document_weight) == 0:
+                    print("Something might have gone wrong with: ", i)
+                    np.ones((len(document)))
+                else:
+                    document_weight = np.sqrt(document_weight/np.max(document_weight))  # idea: take sqrt to make huge intensity differences less severe
+            else:
+                document_weight = np.ones((len(document)))
+            if len(document) > 0:
+                term1 = np.zeros((len(document), vector_size))
+                for m, doc in enumerate(document):
+                    term1[m,:] = self.model_glove.word_vectors[self.model_glove.dictionary[doc]]
+                if tfidf_weighted:
+                    term2 = np.array(list(zip(*self.tfidf[self.bow_corpus[i]]))[1])
+                else:
+                    term2 = np.ones((len(document)))
+                    
+                term1 = term1 * np.tile(document_weight, (vector_size,1)).T
+                weighted_docvector = np.sum((term1.T * term2).T, axis=0)
+            else:
+                weighted_docvector = np.zeros((vector_size))
+            vectors_glove.append(weighted_docvector)
+            
+        self.vectors_glove = np.array(vectors_glove)
+        
 
 ##
 ## -------------------- Calculate similarities -----------------------------------
@@ -533,7 +584,7 @@ class SimilarityMeasures():
         print("Calculated distances between ", list_similars.shape[0], " documents.")
         self.list_similars_ctr_idx = list_similars_idx
         self.list_similars_ctr = list_similars
-        self.mean_similarity_ctr = mean_similarity
+        #self.mean_similarity_ctr = mean_similarity
 
 
 
@@ -555,7 +606,7 @@ class SimilarityMeasures():
         
         self.list_similars_ae_idx = list_similars_ae_idx
         self.list_similars_ae = list_similars_ae
-        self.mean_similarity_ae = mean_similarity
+        #self.mean_similarity_ae = mean_similarity
 
 
     def get_pca_similarity(self, num_hits=25, method='cosine'):
@@ -574,7 +625,7 @@ class SimilarityMeasures():
         
         self.list_similars_pca_idx = list_similars_idx
         self.list_similars_pca = list_similars
-        self.mean_similarity_pca = mean_similarity
+        #self.mean_similarity_pca = mean_similarity
         
         
     def get_lda_similarity(self, num_hits=25):
@@ -653,11 +704,35 @@ class SimilarityMeasures():
             See scipy spatial.distance.cdist for options. Default is 'cosine'.
         """
         
-        if self.model_doc2vec is None:
+        if self.vectors_glove is None:
             print("No trained Doc2Vec model found.")
             print("Please first train model using 'build_model_doc2vec' function.")
         else:
-            vectors = np.zeros((len(self.corpus), self.model_doc2vec.vector_size))
+            list_similars_idx, list_similars, mean_similarity = functions.calculate_similarities(self.vectors_glove, 
+                                                                       num_hits, method = method)
+            print("Calculated distances between ", list_similars.shape[0], " documents.")
+            self.list_similars_ctr_idx = list_similars_idx
+            self.list_similars_ctr = list_similars
+            self.mean_similarity_ctr = mean_similarity
+
+
+    def get_glove_similarity(self, num_hits=25, method='cosine'):
+        """ Calculate GloVe based similarities (all-vs-all)
+        
+        Args:
+        -------
+        num_centroid_hits: int
+            Function will store the num_centroid_hits closest matches. Default is 25.      
+        method: str
+            See scipy spatial.distance.cdist for options. Default is 'cosine'.
+        """
+        
+        if self.model_glove is None:
+            print("No GloVe document vectors found.")
+            print("Please first train model using 'build_model_glove' function.")
+            print("Then create document vectors using 'get_vectors_glove' function.")
+        else:
+            vectors = np.zeros((len(self.corpus), self.model_glove.vector_size))
             
             for i in range(len(self.corpus)):
                 vectors[i,:] = self.model_doc2vec.docvecs[i]
@@ -665,9 +740,8 @@ class SimilarityMeasures():
             list_similars_idx, list_similars, mean_similarity = functions.calculate_similarities(vectors, 
                                                                        num_hits, method = method)
             
-            self.list_similars_d2v_idx = list_similars_idx
-            self.list_similars_d2v = list_similars
-            self.mean_similarity_d2v = mean_similarity
+            self.list_similars_glove_idx = list_similars_idx
+            self.list_similars_glove = list_similars
 
 
     def similarity_search(self, num_centroid_hits=100, centroid_min=0.3, 
