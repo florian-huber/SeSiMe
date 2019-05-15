@@ -81,6 +81,8 @@ class SimilarityMeasures():
         self.list_similars_lsi_idx = None
         self.list_similars_d2v = None
         self.list_similars_d2v_idx = None
+        self.list_similars_glove = None
+        self.list_similars_glove_idx = None
 
 
     def preprocess_documents(self, max_fraction, min_frequency, 
@@ -380,6 +382,56 @@ class SimilarityMeasures():
             # Save trained models
             self.autoencoder.save(file_model_ae) 
             self.encoder.save(file_model_encoder)
+            
+            
+    def build_model_glove(self, file_model_glove, vector_size=300, window=100, 
+                          learning_rate=0.05, workers=4, epochs=100, use_stored_model=True):
+        """ Build glove model
+        
+        Args:
+        --------
+        file_model_glove: str,
+            Filename to save model (or load model if it exists under this name).
+        vector_size: int,
+            Dimensions of word vectors (default = 100) 
+        window: int,
+            Window size for context words (small for local context, 
+            larger for global context, default = 50)
+        learning_rate: float,
+            Learning rate for training of GloVe model (defaut set to 0.05).
+        workers: int,
+            Number of threads to run the training on (should not be more than number of cores/threads, default = 4).
+        epochs: int,
+            Number of training iterations (default=100). 
+        use_stored_model: bool,
+            Load stored model if True, else train new model.
+        """
+        from glove import Corpus, Glove
+        
+        # Check if model already exists and should be loaded
+        if os.path.isfile(file_model_glove) and use_stored_model:   
+            print("Load stored GloVe model ...")
+            self.model_glove = Glove.load(file_model_glove)
+        else:
+            if use_stored_model:
+                print("Stored GloVe model not found!")
+            
+            print("Calculating new GloVe model...")
+        
+            # Creating a corpus object
+            corpus = Corpus() 
+            
+            # Training the corpus to generate the co occurence matrix which is used in GloVe
+            MS_docs = self.corpus
+            corpus.fit(MS_docs, window=window)
+
+            self.model_glove = Glove(no_components=vector_size, learning_rate=learning_rate)          
+            self.model_glove.fit(corpus.matrix, epochs=epochs, no_threads=workers, verbose=True)
+            self.model_glove.add_dictionary(corpus.dictionary)
+            
+            # Save model
+            self.model_glove.save('glove.model')
+
  
 ##
 ## -------------------- Calculate vectors -------------------------------------
