@@ -11,7 +11,6 @@ from gensim.test.utils import get_tmpfile
 from gensim.models.callbacks import CallbackAny2Vec
 
 from scipy import spatial
-
 from sklearn.decomposition import PCA
 
 import keras
@@ -21,15 +20,17 @@ from keras.layers import Input, Dense
 import helper_functions as functions
 
 
-        
+       
 class EpochLogger(CallbackAny2Vec):
-    '''Callback to log information about training'''
+    '''Callback to log information about training progress.
+    Used to keep track of gensim model training (word2vec, lda...)'''
     def __init__(self, num_of_epochs):
         self.epoch = 0
         self.num_of_epochs = num_of_epochs
     def on_epoch_end(self, model):
         print('\r', 'Epoch ', (self.epoch+1), ' of ', self.num_of_epochs, '.' , end="")
         self.epoch += 1
+
 
 class SimilarityMeasures():
     """ Class to run different similarity measure on sentence-like data.
@@ -97,9 +98,19 @@ class SimilarityMeasures():
             
         Calculate word frequency
         --> Words that occur more than max_fraction will become stopwords (words with no or little discriminative power)
+        
+        Args:
+        --------
+        max_fraction: float
+            Gives maximum fraction of documents that may contain a certain word.
+        min_frequency: int
+            Words that occur less frequently will be ignored.
+        remove_stopwords: list, None
+            Give list of stopwords if they should be removed. Default is None.
+        create_stopwords: bool
+            if True: Words that are more common then max_fraction will be added to stopwords.
         """
-        # max_fraction gives maximum fraction of documents that may contain a certain word
-        # Words that are more common will be added to stopwords
+        
         if max_fraction <= 0 or max_fraction > 1:
             print("max_fraction should be value > 0 and <= 1.")
         
@@ -495,8 +506,13 @@ class SimilarityMeasures():
 #        # TODO add save and load options
 
         
-    def get_vectors_pca(self, dimension):
-        """ Calculate PCA vectors for all documents
+    def get_vectors_pca(self, dimension=100):
+        """ Calculate PCA vectors for all documents.
+        
+        Args:
+        -------
+        dimension: int
+            Dimension of reduced PCA vectors. Default is 100. 
         """
         pca = PCA(n_components=dimension)
         
@@ -516,7 +532,7 @@ class SimilarityMeasures():
         self.vectors_pca = pca.fit_transform(self.X_data)
         
         
-    def get_vectors_glove(self, MS_measure, extra_weights = None, tfidf_weighted=True):
+    def get_vectors_glove(self, extra_weights = None, tfidf_weighted=True):
         """ Calculate GloVe vectors for all documents
         
         Individual word vectors are weighted using tfidf (unless weighted=False).
@@ -708,12 +724,17 @@ class SimilarityMeasures():
             print("No trained Doc2Vec model found.")
             print("Please first train model using 'build_model_doc2vec' function.")
         else:
-            list_similars_idx, list_similars, mean_similarity = functions.calculate_similarities(self.vectors_glove, 
+            vectors = np.zeros((len(self.corpus), self.model_doc2vec.vector_size))
+            
+            for i in range(len(self.corpus)):
+                vectors[i,:] = self.model_doc2vec.docvecs[i]
+    
+            list_similars_idx, list_similars, mean_similarity = functions.calculate_similarities(vectors, 
                                                                        num_hits, method = method)
-            print("Calculated distances between ", list_similars.shape[0], " documents.")
+            
             self.list_similars_ctr_idx = list_similars_idx
             self.list_similars_ctr = list_similars
-            self.mean_similarity_ctr = mean_similarity
+            #self.mean_similarity_ctr = mean_similarity
 
 
     def get_glove_similarity(self, num_hits=25, method='cosine'):
@@ -732,13 +753,9 @@ class SimilarityMeasures():
             print("Please first train model using 'build_model_glove' function.")
             print("Then create document vectors using 'get_vectors_glove' function.")
         else:
-            vectors = np.zeros((len(self.corpus), self.model_glove.vector_size))
-            
-            for i in range(len(self.corpus)):
-                vectors[i,:] = self.model_doc2vec.docvecs[i]
-    
-            list_similars_idx, list_similars, mean_similarity = functions.calculate_similarities(vectors, 
+            list_similars_idx, list_similars, mean_similarity = functions.calculate_similarities(self.vectors_glove, 
                                                                        num_hits, method = method)
+            print("Calculated distances between ", list_similars.shape[0], " documents.")
             
             self.list_similars_glove_idx = list_similars_idx
             self.list_similars_glove = list_similars
