@@ -1008,8 +1008,8 @@ def fast_cosine_shift2(spectrum1, spectrum2, tol, max_mz):
     if len(spectrum1.peaks) == 0 or len(spectrum2.peaks) == 0:
         return 0.0,[]
 
-    spec1 = np.array(spectrum1.peaks.copy())
-    spec2 = np.array(spectrum2.peaks.copy())
+    spec1 = np.array(spectrum1.peaks.copy(), dtype=float)
+    spec2 = np.array(spectrum2.peaks.copy(), dtype=float)
     
     # Normalize intensities:
     spec1[:,1] = spec1[:,1]/np.max(spec1[:,1])
@@ -1040,21 +1040,25 @@ def fast_cosine_shift2(spectrum1, spectrum2, tol, max_mz):
     return score
 
     
-def fast_cosine_shift3(spectrum1, spectrum2, tol, min_match):
+def fast_cosine_shift_hungarian(spectrum1, spectrum2, tol, min_match, min_intens=0):
     """ Taking full care of weighted bipartite matching problem:
         Use Hungarian algorithm (slow...)
     """
     if len(spectrum1.peaks) == 0 or len(spectrum2.peaks) == 0:
         return 0.0,[]
 
-    spec1 = np.array(spectrum1.peaks)
-    spec2 = np.array(spectrum2.peaks)
+    spec1 = np.array(spectrum1.peaks, dtype=float)
+    spec2 = np.array(spectrum2.peaks, dtype=float)
     
     # normalize intensities:
     spec1[:,1] = spec1[:,1]/max(spec1[:,1])
     spec2[:,1] = spec2[:,1]/max(spec2[:,1])
     
-    zero_pairs = find_pairs2(spec1, spec2, tol, shift=0.0)
+    # filter, if wanted:
+    spec1 = spec1[spec1[:,1] > min_intens,:]
+    spec2 = spec2[spec2[:,1] > min_intens,:]
+    
+    zero_pairs = find_pairs(spec1, spec2, tol, shift=0.0)
 
     shift = spectrum1.parent_mz - spectrum2.parent_mz
 
@@ -1090,9 +1094,30 @@ def molnet_matrix(spectra,
                   tol, 
                   max_mz, min_mz = 0, 
                   min_match = 2, min_intens = 0.01,
-                  filename = None):
+                  filename = None,
+                  method='fast'):
     """ Create Matrix of all mol.networking similarities.
     Takes some time to calculate, so better only do it once and save as npy.
+    
+    spectra: list
+        List of spectra (of Spectrum class)
+    tol: float
+        Tolerance to still count peaks a match (mz +- tolerance).
+    max_mz: float
+        Maxium m-z mass to take into account
+    min_mz: float 
+        Minimum m-z mass to take into account
+    min_match: int
+        Minimum numbe of peaks that need to be matches. Otherwise score will be set to 0
+    min_intens: float
+        Sets the minimum relative intensity peaks must have to be looked at for potential matches.
+    filename: str/ None
+        Filename to look for existing npy-file with molent matrix. Or, if not found, to 
+        use to save the newly calculated matrix.
+    method: 'fast' | 'hungarian'
+        "Fast" will use Simon's molnet scoring which is much faster, but not 100% accurate
+        regarding the weighted bipartite matching problem.
+        "hungarian" will use the Hungarian algorithm, which is slower but more accurate.
     """  
     if filename is not None:
         try: 
@@ -1113,8 +1138,13 @@ def molnet_matrix(spectra,
                 print('\r', ' Molnet for spectrum ', i+1, ' of ', len(spectra), ' spectra.', end="")
         
             for j in range(i,len(spectra)):
-                molnet_sim[i,j] = fast_cosine_shift(spectra[i], spectra[j], tol, min_match, min_intens = min_intens)
-        
+                if method == 'fast':
+                    molnet_sim[i,j] = fast_cosine_shift(spectra[i], spectra[j], tol, min_match, min_intens = min_intens)
+                elif method == 'hungarian':
+                    molnet_sim[i,j] = fast_cosine_shift_hungarian(spectra[i], spectra[j], tol, min_match, min_intens = min_intens)
+                else:
+                    print("Given method does not exist...")
+
         # Symmetric matrix --> fill        
         for i in range(1,len(spectra)):
             for j in range(i):  
