@@ -956,8 +956,8 @@ def fast_cosine_shift(spectrum1, spectrum2, tol, min_match, min_intens = 0):
     if len(spectrum1.peaks) == 0 or len(spectrum2.peaks) == 0:
         return 0.0,[]
 
-    spec1 = np.array(spectrum1.peaks)
-    spec2 = np.array(spectrum2.peaks)
+    spec1 = np.array(spectrum1.peaks, dtype=float)
+    spec2 = np.array(spectrum2.peaks, dtype=float)
     
     # normalize intensities:
     spec1[:,1] = spec1[:,1]/max(spec1[:,1])
