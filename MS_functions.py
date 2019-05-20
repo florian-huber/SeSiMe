@@ -1100,7 +1100,8 @@ def molnet_matrix(spectra,
                   min_match = 2, min_intens = 0.01,
                   filename = None,
                   method='fast',
-                  num_workers = 4):
+                  num_workers = 4,
+                  safety_points = 50):
     """ Create Matrix of all mol.networking similarities.
     Takes some time to calculate, so better only do it once and save as npy.
     Now implemented: parallelization of code using concurrent.futures.
@@ -1126,6 +1127,8 @@ def molnet_matrix(spectra,
         "hungarian" will use the Hungarian algorithm, which is slower but more accurate.
     num_workers: int
         Number of threads to use for calculation. 
+    safety_points: int
+        Number of safety points, i.e. number of times the molnet-matrix is saved during process.
     """  
     if filename is not None:
         try: 
@@ -1142,12 +1145,14 @@ def molnet_matrix(spectra,
         molnet_sim = np.zeros((len(spectra), len(spectra)))
         
         counter = 0
+        safety_save = int(((len(spectra)**2)/2)/safety_points)  # Save molnet-matrix along process
         print("Calculate pairwise MolNet scores by ", num_workers, "number of workers.")
         for i in range(len(spectra)):
             parameter_collection = []    
             for j in range(i,len(spectra)):
                 parameter_collection.append([spectra[i], spectra[j], i, j, tol, min_match, min_intens, method, counter])
                 counter += 1
+# OLD code w/o parallelization:
             # Show progress
 #            if (i+1) % 10 == 0 or i == len(spectra)-1:  
 #                print('\r', ' Molnet for spectrum ', i+1, ' of ', len(spectra), ' spectra.', end="")
@@ -1166,10 +1171,12 @@ def molnet_matrix(spectra,
                 futures = [executor.submit(molnet_pair, X, len(spectra)) for X in parameter_collection]
                 molnet_pairs.append(futures)
              
-            for m, future in enumerate(molnet_pairs):# X in parameter_collection:
+            for m, future in enumerate(molnet_pairs):
                 spec_i, spec_j, ind_i, ind_j, _, _, _, _, _ = parameter_collection[m]
                 molnet_sim[ind_i,ind_j] = future[0].result()
-#                molnet_sim[i,j] = molnet_pairs[0][counter].result()
+                
+            if (counter+1) % safety_save == 0:
+                np.save(filename, molnet_sim)
 
         # Symmetric matrix --> fill        
         for i in range(1,len(spectra)):
