@@ -1171,12 +1171,12 @@ def molnet_matrix(spectra,
                 futures = [executor.submit(molnet_pair, X, len(spectra)) for X in parameter_collection]
                 molnet_pairs.append(futures)
              
-            for m, future in enumerate(molnet_pairs):
-                spec_i, spec_j, ind_i, ind_j, _, _, _, _, _ = parameter_collection[m]
-                molnet_sim[ind_i,ind_j] = future[0].result()
-                
-            if (counter+1) % safety_save == 0:
-                np.save(filename, molnet_sim)
+            for m, future in enumerate(molnet_pairs[0]):
+                spec_i, spec_j, ind_i, ind_j, _, _, _, _, counting = parameter_collection[m]
+                molnet_sim[ind_i,ind_j] = future.result()
+                if (counting+1) % safety_save == 0:
+                    np.save(filename, molnet_sim)
+
 
         # Symmetric matrix --> fill        
         for i in range(1,len(spectra)):
