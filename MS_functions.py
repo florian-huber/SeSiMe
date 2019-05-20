@@ -21,6 +21,10 @@ from rdkit import DataStructs
 from rdkit.Chem.Fingerprints import FingerprintMols
 from rdkit.Chem import AllChem
 
+# Add multi core parallelization
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
 ## --------------------------------------------------------------------------------------------------
 ## ---------------------------- Spectrum class ------------------------------------------------------
 ## --------------------------------------------------------------------------------------------------
@@ -1095,9 +1099,11 @@ def molnet_matrix(spectra,
                   max_mz, min_mz = 0, 
                   min_match = 2, min_intens = 0.01,
                   filename = None,
-                  method='fast'):
+                  method='fast',
+                  num_workers = 4):
     """ Create Matrix of all mol.networking similarities.
     Takes some time to calculate, so better only do it once and save as npy.
+    Now implemented: parallelization of code using concurrent.futures.
     
     spectra: list
         List of spectra (of Spectrum class)
@@ -1118,6 +1124,8 @@ def molnet_matrix(spectra,
         "Fast" will use Simon's molnet scoring which is much faster, but not 100% accurate
         regarding the weighted bipartite matching problem.
         "hungarian" will use the Hungarian algorithm, which is slower but more accurate.
+    num_workers: int
+        Number of threads to use for calculation. 
     """  
     if filename is not None:
         try: 
@@ -1132,18 +1140,36 @@ def molnet_matrix(spectra,
     
     if collect_new_data == True:      
         molnet_sim = np.zeros((len(spectra), len(spectra)))
-        for i in range(len(spectra)):
-            # Show progress
-            if (i+1) % 10 == 0 or i == len(spectra)-1:  
-                print('\r', ' Molnet for spectrum ', i+1, ' of ', len(spectra), ' spectra.', end="")
         
+        counter = 0
+        print("Calculate pairwise MolNet scores by ", num_workers, "number of workers.")
+        for i in range(len(spectra)):
+            parameter_collection = []    
             for j in range(i,len(spectra)):
-                if method == 'fast':
-                    molnet_sim[i,j] = fast_cosine_shift(spectra[i], spectra[j], tol, min_match, min_intens = min_intens)
-                elif method == 'hungarian':
-                    molnet_sim[i,j] = fast_cosine_shift_hungarian(spectra[i], spectra[j], tol, min_match, min_intens = min_intens)
-                else:
-                    print("Given method does not exist...")
+                parameter_collection.append([spectra[i], spectra[j], i, j, tol, min_match, min_intens, method, counter])
+                counter += 1
+            # Show progress
+#            if (i+1) % 10 == 0 or i == len(spectra)-1:  
+#                print('\r', ' Molnet for spectrum ', i+1, ' of ', len(spectra), ' spectra.', end="")
+#        
+#            for j in range(i,len(spectra)):
+#                if method == 'fast':
+#                    molnet_sim[i,j] = fast_cosine_shift(spectra[i], spectra[j], tol, min_match, min_intens = min_intens)
+#                elif method == 'hungarian':
+#                    molnet_sim[i,j] = fast_cosine_shift_hungarian(spectra[i], spectra[j], tol, min_match, min_intens = min_intens)
+#                else:
+#                    print("Given method does not exist...")
+
+            # Create a pool of processes. For instance one for each CPU in your machine.
+            molnet_pairs = []
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                futures = [executor.submit(molnet_pair, X, len(spectra)) for X in parameter_collection]
+                molnet_pairs.append(futures)
+             
+            for m, future in enumerate(molnet_pairs):# X in parameter_collection:
+                spec_i, spec_j, ind_i, ind_j, _, _, _, _, _ = parameter_collection[m]
+                molnet_sim[ind_i,ind_j] = future[0].result()
+#                molnet_sim[i,j] = molnet_pairs[0][counter].result()
 
         # Symmetric matrix --> fill        
         for i in range(1,len(spectra)):
@@ -1154,6 +1180,23 @@ def molnet_matrix(spectra,
             np.save(filename, molnet_sim)
             
     return molnet_sim
+
+
+def molnet_pair(X, len_spectra):
+    """ Single molnet pair calculation
+    """ 
+    spectra_i, spectra_j, i, j, tol, min_match, min_intens, method, counter = X
+    if method == 'fast':
+        molnet_pair = fast_cosine_shift(spectra_i, spectra_j, tol, min_match, min_intens = min_intens)
+    elif method == 'hungarian':
+        molnet_pair = fast_cosine_shift_hungarian(spectra_i, spectra_j, tol, min_match, min_intens = min_intens)
+    else:
+        print("Given method does not exist...")
+
+    if (counter+1) % 1000 == 0 or counter == len_spectra-1:  
+        print('\r', ' Calculated MolNet for pair ', i, '--', j, '. ( ', np.round(200*(counter+1)/len_spectra**2, 2), ' % done).', end="")
+
+    return molnet_pair
 
 
 def tanimoto_matrix(spectra, 
