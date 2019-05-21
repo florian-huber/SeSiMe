@@ -1081,6 +1081,8 @@ def fast_cosine_shift_hungarian(spectrum1, spectrum2, tol, min_match, min_intens
     list2 = list(set2)
     matrix_size = max(len(set1), len(set2))    
     matrix = np.ones((matrix_size, matrix_size))
+
+    # TODO: Add min_match criteria!
     
     for m in matching_pairs:
         matrix[list1.index(m[0]),list2.index(m[1])] = 1 - m[2]
