@@ -1061,7 +1061,6 @@ def fast_cosine_shift_hungarian(spectrum1, spectrum2, tol, min_match, min_intens
     # filter, if wanted:
     spec1 = spec1[spec1[:,1] > min_intens,:]
     spec2 = spec2[spec2[:,1] > min_intens,:]
-    
     zero_pairs = find_pairs(spec1, spec2, tol, shift=0.0)
 
     shift = spectrum1.parent_mz - spectrum2.parent_mz
@@ -1083,15 +1082,20 @@ def fast_cosine_shift_hungarian(spectrum1, spectrum2, tol, min_match, min_intens
     matrix = np.ones((matrix_size, matrix_size))
 
     # TODO: Add min_match criteria!
+    if len(matching_pairs) > 0:
+        for m in matching_pairs:
+            matrix[list1.index(m[0]),list2.index(m[1])] = 1 - m[2]
     
-    for m in matching_pairs:
-        matrix[list1.index(m[0]),list2.index(m[1])] = 1 - m[2]
-
-    row_ind, col_ind = linear_sum_assignment(matrix)
-    score = matrix.shape[0] - matrix[row_ind, col_ind].sum()
+        row_ind, col_ind = linear_sum_assignment(matrix)
+        score = matrix.shape[0] - matrix[row_ind, col_ind].sum()
         
-    # normalize score:
-    score = score/max(np.sum(spec1[:,1]**2), np.sum(spec2[:,1]**2))
+        if np.sum(matrix[row_ind, col_ind] != 1) < min_match:
+            score = 0.0
+        else:      
+            # normalize score:
+            score = score/max(np.sum(spec1[:,1]**2), np.sum(spec2[:,1]**2))
+    else:
+        score = 0.0
     
     return score
 
