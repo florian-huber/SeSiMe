@@ -424,12 +424,13 @@ def load_MS_data(path_data, path_json,
             spectra.append(spectrum)
             spectra_dict[filename] = spectrum.__dict__
 
-        MS_documents, MS_documents_intensity, _ = create_MS_documents(spectra, num_decimals, 
+        MS_documents, MS_documents_intensity, spectra_metadata = create_MS_documents(spectra, num_decimals, 
                                                                      peak_loss_words, 
                                                                      min_loss, max_loss)
 
         # Save collected data
         if collect_new_data == True:
+            spectra_metadata.to_csv(path_json + results_file[:-5] + "_metadata.csv", index=False)
             
             functions.dict_to_json(spectra_dict, path_json + results_file)     
             # Store documents
@@ -441,7 +442,7 @@ def load_MS_data(path_data, path_json,
                 for s in MS_documents_intensity:
                     f.write(str(s) +"\n")
 
-    return spectra, spectra_dict, MS_documents, MS_documents_intensity
+    return spectra, spectra_dict, MS_documents, MS_documents_intensity, spectra_metadata
 
 
 
