@@ -1165,8 +1165,20 @@ def molnet_matrix(spectra,
     if filename is not None:
         try: 
             molnet_sim = np.load(filename)
-            print("MolNet similarity scores found and loaded.")
-            collect_new_data = False
+            # Check if matrix was calculated to the end:
+            diagonal = molnet_sim.diagonal()
+            if np.min(diagonal) == 0:
+                print("Uncomplete MolNet similarity scores found and loaded.")
+                print("Missing MolNet scores will be calculated.")
+                n_start = max(0, np.where(diagonal == 0)[0][0] -1 )
+                counter_init = (n_start-1) * len(spectra) - ((n_start-1)**2 - (n_start-1))/2
+                print("About ", 200*counter_init/(len(spectra)**2),"% of the values already completed.")
+                collect_new_data = True
+            else:    
+                print("Complete MolNet similarity scores found and loaded.")
+                n_start = 0
+                counter_init = 0
+                collect_new_data = False
                 
         except FileNotFoundError: 
             print("Could not find file ", filename) 
@@ -1175,11 +1187,11 @@ def molnet_matrix(spectra,
     
     if collect_new_data == True:      
         molnet_sim = np.zeros((len(spectra), len(spectra)))
-        
-        counter = 0
+
+        counter = counter_init
         safety_save = int(((len(spectra)**2)/2)/safety_points)  # Save molnet-matrix along process
         print("Calculate pairwise MolNet scores by ", num_workers, "number of workers.")
-        for i in range(len(spectra)):
+        for i in range(n_start, len(spectra)):
             parameter_collection = []    
             for j in range(i,len(spectra)):
                 parameter_collection.append([spectra[i], spectra[j], i, j, tol, min_match, min_intens, method, counter])
