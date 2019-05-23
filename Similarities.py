@@ -448,26 +448,53 @@ class SimilarityMeasures():
 ##
 ## -------------------- Calculate document vectors -------------------------------------
 ## 
-    def get_vectors_centroid(self, extra_weights = None, tfidf_weighted=True):
+    def get_vectors_centroid(self, method = 'update', extra_weights = None, tfidf_weighted=True):
         """ Calculate centroid vectors for all documents
         
         Individual word vectors are weighted using tfidf (unless weighted=False).
         
         Args:
         --------
+        method: str
+            Which method to use if not all words are present in trained model.
+            'update': word2vec model will be updated by additional training of the model.
+            'ignore': will ignore all 'words' not present in the pre-trained model.
+            TODO 'substitute": will look to replace missing words with closest matches?
         extra_weights: list
             List of extra weights for add documents (and every word). Set to "None" if not used.
         tfidf_weighted: bool
             True, False
         """
         
-        #TODO: include extra weights!
-        
         # Check if everything is there:
+        # 1) Check if model and bow-corpus are present
         if self.model_word2vec is None:
             print("Word2vec model first needs to be load or made (self.build_model_word2vec).")
         if len(self.bow_corpus) == 0:
             print("BOW corpus has not been calculated yet (bow_corpus).")
+        
+        # 2) Check if all words are included in trained word2vec model
+        dictionary = [self.dictionary[x] for x in self.dictionary]
+        test_vocab = []
+        for i, word in enumerate(dictionary):                
+            if word not in self.model_word2vec.wv.vocab:
+                test_vocab.append((i, word))
+        
+        if len(test_vocab) > 0:
+            print("Not all 'words' of the given documents are present in the trained word2vec model!")
+            print(len(test_vocab), " out of ", len(self.dictionary), " 'words' were not found in the word2vec model.")
+            if method == 'update':
+                print("The word2vec model will hence be updated by additional training.")
+                self.model_word2vec.build_vocab(self.corpus, update=True)
+                self.model_word2vec.train(self.corpus, total_examples=len(self.corpus), epochs = 5)
+                self.model_word2vec.save('newmodel')
+                
+            elif method == 'ignore':
+                print("'Words'missing in the pretrained word2vec model will be ignored.")
+            else:
+                print("Given method how do deal with missing words in pretrained model not found.")
+        else:
+            print("All 'words' of the given documents were found in the trained word2vec model.")
         
         self.tfidf = models.TfidfModel(self.bow_corpus)
         vector_size = self.model_word2vec.wv.vector_size
