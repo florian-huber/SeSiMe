@@ -465,6 +465,8 @@ class SimilarityMeasures():
         tfidf_weighted: bool
             True, False
         """
+        # TODO  maybe move the update section to the build_model function?
+        # TODO  add place to specify how many epochs the update-training should take
         
         # Check if everything is there:
         # 1) Check if model and bow-corpus are present
@@ -486,7 +488,7 @@ class SimilarityMeasures():
             if method == 'update':
                 print("The word2vec model will hence be updated by additional training.")
                 self.model_word2vec.build_vocab(self.corpus, update=True)
-                self.model_word2vec.train(self.corpus, total_examples=len(self.corpus), epochs = 5)
+                self.model_word2vec.train(self.corpus, total_examples=len(self.corpus), epochs = 10)
                 self.model_word2vec.save('newmodel')
                 
             elif method == 'ignore':
