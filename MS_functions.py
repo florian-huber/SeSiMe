@@ -426,8 +426,13 @@ def load_MS_data(path_data, path_json,
 
         MS_documents, MS_documents_intensity, spectra_metadata = create_MS_documents(spectra, num_decimals, 
                                                                      peak_loss_words, 
-                                                                     min_loss, max_loss)
-
+                                                                    min_loss, max_loss)
+        # Add filenames to metadata
+        filenames = []
+        for spectrum in spectra:
+            filenames.append(spectrum.filename)
+        spectra_metadata["filename"] = filenames
+        
         # Save collected data
         if collect_new_data == True:
             spectra_metadata.to_csv(path_json + results_file[:-5] + "_metadata.csv", index=False)
