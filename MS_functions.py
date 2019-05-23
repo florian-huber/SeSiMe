@@ -352,6 +352,7 @@ def load_MS_data(path_data, path_json,
     if results_file is not None:
         try: 
             spectra_dict = functions.json_to_dict(path_json + results_file)
+            spectra_metadata = pd.read_csv(path_json + results_file[:-5] + "_metadata.csv")
             print("Spectra json file found and loaded.")
             spectra = dict_to_spectrum(spectra_dict)
             collect_new_data = False
