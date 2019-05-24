@@ -1191,9 +1191,12 @@ def molnet_matrix(spectra,
             print("Could not find file ", filename) 
             print("MolNet scores will be calculated from scratch.")
             collect_new_data = True
+            n_start = 0
+            counter_init = 0
     
-    if collect_new_data == True:      
-        molnet_sim = np.zeros((len(spectra), len(spectra)))
+    if collect_new_data == True:  
+        if counter_init == 0:
+            molnet_sim = np.zeros((len(spectra), len(spectra)))
 
         counter = counter_init
         safety_save = int(((len(spectra)**2)/2)/safety_points)  # Save molnet-matrix along process
@@ -1226,7 +1229,7 @@ def molnet_matrix(spectra,
                 spec_i, spec_j, ind_i, ind_j, _, _, _, _, counting = parameter_collection[m]
                 molnet_sim[ind_i,ind_j] = future.result()
                 if (counting+1) % safety_save == 0:
-                    np.save(filename, molnet_sim)
+                    np.save(filename[:-4]+ str(i), molnet_sim)
 
 
         # Symmetric matrix --> fill        
