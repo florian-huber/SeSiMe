@@ -497,7 +497,7 @@ def load_MGF_data(path_json,
                 
         except FileNotFoundError: 
             print("Could not find file ", path_json,  results_file) 
-            print("Data will be imported from ", results_file)
+            print("Data will be imported from ", mgf_file)
 
     # Read data from files if no pre-stored data is found:
     if spectra_dict == {} or results_file is None:
