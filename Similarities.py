@@ -488,7 +488,7 @@ class SimilarityMeasures():
             if method == 'update':
                 print("The word2vec model will hence be updated by additional training.")
                 self.model_word2vec.build_vocab(self.corpus, update=True)
-                self.model_word2vec.train(self.corpus, total_examples=len(self.corpus), epochs = 10)
+                self.model_word2vec.train(self.corpus, total_examples=len(self.corpus), epochs = 5)
                 self.model_word2vec.save('newmodel')
                 
             elif method == 'ignore':
