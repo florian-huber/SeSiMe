@@ -117,6 +117,8 @@ class Spectrum(object):
                             self.metadata[keyval] = valval
                         if keyval == 'compound':
                             self.annotation = valval
+                        if keyval == 'precursormass':
+                            self.precursor_mz = float(valval)
                         if keyval == 'parentmass':
                             self.parent_mz = float(valval)
                         if keyval == 'intensity':
@@ -195,7 +197,7 @@ class Spectrum(object):
         Remove losses outside window min_loss <-> max_loss.
         """ 
         
-        MS1_peak = self.parent_mz
+        MS1_peak = self.precursor_mz
         losses = np.array(self.peaks.copy())
         losses[:,0] = MS1_peak - losses[:,0]
         keep_idx = np.where((losses[:,0] > self.min_loss) & (losses[:,0] < self.max_loss))[0]
