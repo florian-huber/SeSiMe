@@ -344,7 +344,7 @@ def load_MS_data(path_data, path_json,
                  min_intensity_perc = 0.0,
                  exp_intensity_filter = 0.01,
                  min_peaks = 10,
-                 peaks_per_mz = 20/200,
+                 peaks_per_mz = 15/200,
                  merge_energies = True,
                  merge_ppm = 10,
                  replace = 'max',
@@ -395,27 +395,30 @@ def load_MS_data(path_data, path_json,
             if (i+1) % 10 == 0 or i == len(spectra_files)-1:  
                 print('\r', ' Load spectrum ', i+1, ' of ', len(spectra_files), ' spectra.', end="")
             
-            # TODO: remove following BAD BAD hack:
-            # Import first (acutally only needed is PARENTMASS)
-            spec = Spectrum(min_frag = min_frag, 
-                    max_frag = max_frag,
-                    min_loss = min_loss, 
-                    max_loss = max_loss,
-                    min_intensity_perc = min_intensity_perc,
-                    exp_intensity_filter = None,
-                    min_peaks = 10,
-                    merge_energies = merge_energies,
-                    merge_ppm = merge_ppm,
-                    replace = replace)
-            
-            # Load spectrum data from file:
-            spec.read_spectrum(path_data, filename, i)
-            
-            # Scale the min_peak filter
-            def min_peak_scaling(x, A, B):
-                return int(A + B * x)
-            
-            min_peaks_scaled = min_peak_scaling(spec.parent_mz, min_peaks, peaks_per_mz)        
+            if peaks_per_mz != 0:
+                # TODO: remove following BAD BAD hack:
+                # Import first (acutally only needed is PRECURSOR MASS)
+                spec = Spectrum(min_frag = min_frag, 
+                        max_frag = max_frag,
+                        min_loss = min_loss, 
+                        max_loss = max_loss,
+                        min_intensity_perc = min_intensity_perc,
+                        exp_intensity_filter = None,
+                        min_peaks = min_peaks,
+                        merge_energies = merge_energies,
+                        merge_ppm = merge_ppm,
+                        replace = replace)
+                
+                # Load spectrum data from file:
+                spec.read_spectrum(path_data, filename, i)
+                
+                # Scale the min_peak filter
+                def min_peak_scaling(x, A, B):
+                    return int(A + B * x)
+                
+                min_peaks_scaled = min_peak_scaling(spec.precursor_mz, min_peaks, peaks_per_mz)        
+            else:
+                min_peaks_scaled = min_peaks
             
             spectrum = Spectrum(min_frag = min_frag, 
                                 max_frag = max_frag,
