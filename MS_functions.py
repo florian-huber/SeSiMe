@@ -119,6 +119,8 @@ class Spectrum(object):
                             self.annotation = valval
                         if keyval == 'precursormass':
                             self.precursor_mz = float(valval)
+                        if keyval == 'Precursor_MZ':
+                            self.precursor_mz = float(valval)
                         if keyval == 'parentmass':
                             self.parent_mz = float(valval)
                         if keyval == 'intensity':
@@ -433,6 +435,13 @@ def load_MS_data(path_data, path_json,
             
             # Load spectrum data from file:
             spectrum.read_spectrum(path_data, filename, i)
+            
+            # Get precursor mass (later used to calculate losses!)
+            if spec.precursor_mz is not None:
+                if 'Precursor_MZ' in spec.metadata:
+                    spec.precursor_mz = float(spec.metadata['Precursor_MZ'])
+                else:
+                    spec.precursor_mz = spec.parent_mz
             
             # Calculate losses:
             spectrum.get_losses()
