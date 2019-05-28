@@ -162,16 +162,27 @@ class Spectrum(object):
         self.id = id
 #        self.filename = doc_name
         
+        # Get precursor mass (later used to calculate losses!)
+        if spectrum_mgf.precursor_mz is not None:
+            self.precursor_mz = spectrum_mgf.precursor_mz
+        elif 'precursormass' in spectrum_mgf.metadata:
+            self.precursor_mz = float(spectrum_mgf.metadata['precursormass'])
+        elif 'singlechargeprecursormass' in spectrum_mgf.metadata:
+            self.precursor_mz = float(spectrum_mgf.metadata['precursormass'])
+        elif spectrum_mgf.parent_mz is not None:
+            print("Only found parent mass, not precursor mass!")
+            self.precursor_mz = spectrum_mgf.parent_mz
+        elif 'parentmass' in spectrum_mgf.metadata:
+            print("Only found parent mass, not precursor mass!")
+            self.precursor_mz = float(spectrum_mgf.metadata['parentmass'])
+        else:
+            print(id, spectrum_mgf.precursor_mz)         
+        
+        # Get parent mass
         if spectrum_mgf.parent_mz is not None:
             self.parent_mz = spectrum_mgf.parent_mz
         elif 'parentmass' in spectrum_mgf.metadata:
             self.parent_mz = float(spectrum_mgf.metadata['parentmass'])
-        elif spectrum_mgf.precursor_mz is not None:
-            print("Only found precursor mass, not parent mass.")
-            self.parent_mz = spectrum_mgf.precursor_mz
-        elif 'precursormass' in spectrum_mgf.metadata:
-            print("Only found precursor mass, not parent mass.")
-            self.parent_mz = float(spectrum_mgf.metadata['precursormass'])
         else:
             print(id, spectrum_mgf.parent_mz) 
         
