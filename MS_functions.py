@@ -1877,3 +1877,29 @@ def plot_best_results(avg_best_scores,
     
     if filename is not None:
         plt.savefig(filename, dpi=600)
+        
+        
+def MS_similarity_network(list_similars_idx, list_similars, filename="MS_word2vec_test.graphml", cutoff_sim=0.7):
+    """ Built network from closest connections found
+        Using networkx
+        
+        TODO: Add maximum number of connections 
+    """
+    
+    dimension = list_similars_idx.shape[0]
+    
+    # Form network
+    import networkx as nx
+    MSnet = nx.Graph()               
+    MSnet.add_nodes_from(np.arange(0,dimension))   
+    
+    for i in range(0,dimension):      
+#        idx = list_similars_ids[i, (list_similars[i,:] < cutoff_dist)]
+        idx = np.where(list_similars[i,:] > cutoff_sim)[0]
+        new_edges = [(i, int(list_similars_idx[i,x]), float(list_similars[i,x])) for x in idx if list_similars_idx[i,x] != i]
+        MSnet.add_weighted_edges_from(new_edges)
+#        Bnet.add_edge(i, int(candidate), weight=float((max_distance - distances[i,candidate])/max_distance) )
+        
+    # export graph for drawing (e.g. using Cytoscape)
+    nx.write_graphml(MSnet, filename)
+    return MSnet
