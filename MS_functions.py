@@ -1879,12 +1879,41 @@ def plot_best_results(avg_best_scores,
         plt.savefig(filename, dpi=600)
         
         
-def MS_similarity_network(list_similars_idx, list_similars, filename="MS_word2vec_test.graphml", cutoff_sim=0.7):
+def MS_similarity_network(MS_measure, similarity_method="centroid", filename="MS_word2vec_test.graphml", cutoff_sim=0.7):
     """ Built network from closest connections found
         Using networkx
         
+    Args:
+    -------
+    MS_measure: SimilarityMeasures object   
+    method: str
+    Determine similarity method (default = "centroid"). 
+    filename: str
+    cutoff_sim: float
+        
         TODO: Add maximum number of connections 
     """
+    if similarity_method == 'centroid':
+        list_similars_idx = MS_measure.list_similars_ctr_idx
+        list_similars_dist = MS_measure.list_similars_ctr
+    elif similarity_method == "pca":
+        candidates_idx = MS_measure.list_similars_pca_idx
+        candidates_dist = MS_measure.list_similars_pca
+    elif similarity_method == "autoencoder":
+        candidates_idx = MS_measure.list_similars_ae_idx
+        candidates_dist = MS_measure.list_similars_ae
+    elif similarity_method == "lda":
+        candidates_idx = MS_measure.list_similars_lda_idx
+        candidates_dist = MS_measure.list_similars_lda
+    elif similarity_method == "lsi":
+        candidates_idx = MS_measure.list_similars_lsi_idx
+        candidates_dist = MS_measure.list_similars_lsi
+    elif similarity_method == "doc2vec":
+        candidates_idx = MS_measure.list_similars_d2v_idx
+        candidates_dist = MS_measure.list_similars_d2v
+    else:
+        print("Wrong method given. Or method not yet implemented in function.")
+    
     
     dimension = list_similars_idx.shape[0]
     
@@ -1895,8 +1924,8 @@ def MS_similarity_network(list_similars_idx, list_similars, filename="MS_word2ve
     
     for i in range(0,dimension):      
 #        idx = list_similars_ids[i, (list_similars[i,:] < cutoff_dist)]
-        idx = np.where(list_similars[i,:] > cutoff_sim)[0]
-        new_edges = [(i, int(list_similars_idx[i,x]), float(list_similars[i,x])) for x in idx if list_similars_idx[i,x] != i]
+        idx = np.where(list_similars_dist[i,:] > cutoff_sim)[0]
+        new_edges = [(i, int(list_similars_idx[i,x]), float(list_similars_dist[i,x])) for x in idx if list_similars_idx[i,x] != i]
         MSnet.add_weighted_edges_from(new_edges)
 #        Bnet.add_edge(i, int(candidate), weight=float((max_distance - distances[i,candidate])/max_distance) )
         
