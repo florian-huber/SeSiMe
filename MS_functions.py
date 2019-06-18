@@ -1879,7 +1879,11 @@ def plot_best_results(avg_best_scores,
         plt.savefig(filename, dpi=600)
         
         
-def MS_similarity_network(MS_measure, similarity_method="centroid", filename="MS_word2vec_test.graphml", cutoff_sim=0.7):
+def MS_similarity_network(MS_measure, 
+                          similarity_method="centroid", 
+                          filename="MS_word2vec_test.graphml", 
+                          cutoff = 0.7,
+                          max_links = 10):
     """ Built network from closest connections found
         Using networkx
         
@@ -1887,48 +1891,51 @@ def MS_similarity_network(MS_measure, similarity_method="centroid", filename="MS
     -------
     MS_measure: SimilarityMeasures object   
     method: str
-    Determine similarity method (default = "centroid"). 
+        Determine similarity method (default = "centroid"). 
     filename: str
-    cutoff_sim: float
-        
-        TODO: Add maximum number of connections 
+        Filename to save network to (as graphml file).
+    cutoff: float
+        Define cutoff. Only consider edges for similarities > cutoff. Default = 0.7.
+    max_links: int
+        Maximum number of similar candidates to add to edges. Default = 10.
     """
     if similarity_method == 'centroid':
         list_similars_idx = MS_measure.list_similars_ctr_idx
-        list_similars_dist = MS_measure.list_similars_ctr
+        list_similars = MS_measure.list_similars_ctr
     elif similarity_method == "pca":
-        candidates_idx = MS_measure.list_similars_pca_idx
-        candidates_dist = MS_measure.list_similars_pca
+        list_similars_idx = MS_measure.list_similars_pca_idx
+        list_similars = MS_measure.list_similars_pca
     elif similarity_method == "autoencoder":
-        candidates_idx = MS_measure.list_similars_ae_idx
-        candidates_dist = MS_measure.list_similars_ae
+        list_similars_idx = MS_measure.list_similars_ae_idx
+        list_similars = MS_measure.list_similars_ae
     elif similarity_method == "lda":
-        candidates_idx = MS_measure.list_similars_lda_idx
-        candidates_dist = MS_measure.list_similars_lda
+        list_similars_idx = MS_measure.list_similars_lda_idx
+        list_similars = MS_measure.list_similars_lda
     elif similarity_method == "lsi":
-        candidates_idx = MS_measure.list_similars_lsi_idx
-        candidates_dist = MS_measure.list_similars_lsi
+        list_similars_idx = MS_measure.list_similars_lsi_idx
+        list_similars = MS_measure.list_similars_lsi
     elif similarity_method == "doc2vec":
-        candidates_idx = MS_measure.list_similars_d2v_idx
-        candidates_dist = MS_measure.list_similars_d2v
+        list_similars_idx = MS_measure.list_similars_d2v_idx
+        list_similars = MS_measure.list_similars_d2v
     else:
         print("Wrong method given. Or method not yet implemented in function.")
+    
+    if max_links > (list_similars_idx.shape[1] - 1):
+        print("Maximum number of candidate links exceeds dimension of 'list_similars'-array.")
     
     
     dimension = list_similars_idx.shape[0]
     
-    # Form network
+    # Initialize network graph
     import networkx as nx
     MSnet = nx.Graph()               
-    MSnet.add_nodes_from(np.arange(0,dimension))   
-    
-    for i in range(0,dimension):      
-#        idx = list_similars_ids[i, (list_similars[i,:] < cutoff_dist)]
-        idx = np.where(list_similars_dist[i,:] > cutoff_sim)[0]
-        new_edges = [(i, int(list_similars_idx[i,x]), float(list_similars_dist[i,x])) for x in idx if list_similars_idx[i,x] != i]
+    MSnet.add_nodes_from(np.arange(0, dimension))   
+       
+    for i in range(0, dimension):      
+        idx = np.where(list_similars[i,:] > cutoff)[0][:max_links]
+        new_edges = [(i, int(list_similars_idx[i,x]), float(list_similars[i,x])) for x in idx if list_similars_idx[i,x] != i]
         MSnet.add_weighted_edges_from(new_edges)
-#        Bnet.add_edge(i, int(candidate), weight=float((max_distance - distances[i,candidate])/max_distance) )
         
-    # export graph for drawing (e.g. using Cytoscape)
+    # Export graph for drawing (e.g. using Cytoscape)
     nx.write_graphml(MSnet, filename)
-    return MSnet
+    print("Network stored as graphml file under: ", filename)
