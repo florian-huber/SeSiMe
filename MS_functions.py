@@ -1201,14 +1201,18 @@ def molnet_matrix(spectra,
             diagonal = molnet_sim.diagonal()
             if np.min(diagonal) == 0:
                 print("Uncomplete MolNet similarity scores found and loaded.")
+                missing_scores = np.where(diagonal == 0)[0].astype(int)     
                 print("Missing MolNet scores will be calculated.")
-                n_start = max(0, np.where(diagonal == 0)[0][0] -1 )
-                counter_init = (n_start-1) * len(spectra) - ((n_start-1)**2 - (n_start-1))/2
-                print("About ", 200*counter_init/(len(spectra)**2),"% of the values already completed.")
+                counter_total = int((len(spectra)**2)/2)
+                counter_init = counter_total - np.sum(len(spectra) - missing_scores)
+#                n_start = max(0, np.where(diagonal == 0)[0][0] -1 )
+#                counter_init = (n_start-1) * len(spectra) - ((n_start-1)**2 - (n_start-1))/2
+                print("About ", 100*(counter_init/counter_total),"% of the values already completed.")
                 collect_new_data = True
             else:    
                 print("Complete MolNet similarity scores found and loaded.")
-                n_start = 0
+#                n_start = 0
+                missing_scores = []
                 counter_init = 0
                 collect_new_data = False
                 
@@ -1216,7 +1220,8 @@ def molnet_matrix(spectra,
             print("Could not find file ", filename) 
             print("MolNet scores will be calculated from scratch.")
             collect_new_data = True
-            n_start = 0
+#            n_start = 0
+            missing_scores = np.arange(0,len(spectra))
             counter_init = 0
     
     if collect_new_data == True:  
@@ -1226,7 +1231,7 @@ def molnet_matrix(spectra,
         counter = counter_init
         safety_save = int(((len(spectra)**2)/2)/safety_points)  # Save molnet-matrix along process
         print("Calculate pairwise MolNet scores by ", num_workers, "number of workers.")
-        for i in range(n_start, len(spectra)):
+        for i in missing_scores: #range(n_start, len(spectra)):
             parameter_collection = []    
             for j in range(i,len(spectra)):
                 parameter_collection.append([spectra[i], spectra[j], i, j, tol, min_match, min_intens, method, counter])
