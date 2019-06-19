@@ -1881,6 +1881,7 @@ def plot_best_results(avg_best_scores,
         
 def MS_similarity_network(MS_measure, 
                           similarity_method="centroid", 
+                          link_method = "single", 
                           filename="MS_word2vec_test.graphml", 
                           cutoff = 0.7,
                           max_links = 10):
@@ -1933,7 +1934,12 @@ def MS_similarity_network(MS_measure,
        
     for i in range(0, dimension):      
         idx = np.where(list_similars[i,:] > cutoff)[0][:max_links]
-        new_edges = [(i, int(list_similars_idx[i,x]), float(list_similars[i,x])) for x in idx if list_similars_idx[i,x] != i]
+        if link_method == "single":
+            new_edges = [(i, int(list_similars_idx[i,x]), float(list_similars[i,x])) for x in idx if list_similars_idx[i,x] != i]
+        elif link_method == "mutual":
+            new_edges = [(i, int(list_similars_idx[i,x]), float(list_similars[i,x])) for x in idx if list_similars_idx[i,x] != i if i in list_similars_idx[x,:]]
+        else:
+            print("Link method not kown")
         MSnet.add_weighted_edges_from(new_edges)
         
     # Export graph for drawing (e.g. using Cytoscape)
