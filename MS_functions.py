@@ -1889,7 +1889,8 @@ def MS_similarity_network(MS_measure,
                           link_method = "single", 
                           filename="MS_word2vec_test.graphml", 
                           cutoff = 0.7,
-                          max_links = 10):
+                          max_links = 10,
+                          extern_matrix = None):
     """ Built network from closest connections found
         Using networkx
         
@@ -1905,7 +1906,8 @@ def MS_similarity_network(MS_measure,
     max_links: int
         Maximum number of similar candidates to add to edges. Default = 10.
     """
-    if similarity_method == 'centroid':
+
+    if similarity_method == "centroid":
         list_similars_idx = MS_measure.list_similars_ctr_idx
         list_similars = MS_measure.list_similars_ctr
     elif similarity_method == "pca":
@@ -1923,12 +1925,27 @@ def MS_similarity_network(MS_measure,
     elif similarity_method == "doc2vec":
         list_similars_idx = MS_measure.list_similars_d2v_idx
         list_similars = MS_measure.list_similars_d2v
+    elif similarity_method == "extern":
+        num_candidates = MS_measure.list_similars_ctr_idx.shape[1]
+        list_similars = np.zeros((MS_measure.list_similars_ctr_idx.shape))
+        list_similars_idx = np.zeros((MS_measure.list_similars_ctr_idx.shape)).astype(int)
+        
+        if extern_matrix is None:
+            print("Need externally derived similarity matrix to proceed.")
+        else:
+            if extern_matrix.shape[0] == extern_matrix.shape[1] == list_similars.shape[0]: 
+                for i in range(0, list_similars.shape[0]):
+                    list_similars_idx[i,:] = (-extern_matrix[i]).argsort()[:num_candidates].astype(int)
+                    list_similars[i,:] = extern_matrix[i, list_similars_idx[i,:]]
+            else:
+                print("External matrix with similarity scores does not have the right dimensions.")
     else:
         print("Wrong method given. Or method not yet implemented in function.")
-    
+
+        
     if max_links > (list_similars_idx.shape[1] - 1):
         print("Maximum number of candidate links exceeds dimension of 'list_similars'-array.")
-    
+
     
     dimension = list_similars_idx.shape[0]
     
