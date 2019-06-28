@@ -18,6 +18,8 @@ import random
 import pandas as pd
 
 from rdkit import DataStructs
+from rdkit import Chem
+from rdkit.Chem import Draw
 from rdkit.Chem.Fingerprints import FingerprintMols
 from rdkit.Chem import AllChem
 
@@ -819,7 +821,7 @@ def get_mol_fingerprints(spectra_dict, method = "daylight"):
     for i in range(len(molecules)):
         if molecules[i] is None:
             print("Problem with molecule " + spectra_dict[keys[i]]["id"])
-            molecules[i] = Chem.MolFromSmiles(inchikeys[i])
+            molecules[i] = Chem.inchi.MolFromInchi(inchikeys[i])
             if molecules[i] is None:
                 print("Could not be solved by using the InChikey.")
             else:
@@ -1596,10 +1598,6 @@ def plot_losses(spectra, compare_ids, min_loss = 0, max_loss = 500):
 
 
 
-
-
-from rdkit import Chem
-from rdkit.Chem import Draw
 
 def plot_smiles(query_id, spectra, MS_measure, num_candidates = 10,
                    sharex=True, labels=False, similarity_method = "centroid",
