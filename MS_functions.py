@@ -1249,18 +1249,6 @@ def molnet_matrix(spectra,
             for j in range(i,len(spectra)):
                 parameter_collection.append([spectra[i], spectra[j], i, j, tol, min_match, min_intens, method, counter])
                 counter += 1
-# OLD code w/o parallelization:
-            # Show progress
-#            if (i+1) % 10 == 0 or i == len(spectra)-1:  
-#                print('\r', ' Molnet for spectrum ', i+1, ' of ', len(spectra), ' spectra.', end="")
-#        
-#            for j in range(i,len(spectra)):
-#                if method == 'fast':
-#                    molnet_sim[i,j] = fast_cosine_shift(spectra[i], spectra[j], tol, min_match, min_intens = min_intens)
-#                elif method == 'hungarian':
-#                    molnet_sim[i,j] = fast_cosine_shift_hungarian(spectra[i], spectra[j], tol, min_match, min_intens = min_intens)
-#                else:
-#                    print("Given method does not exist...")
 
             # Create a pool of processes. For instance one for each CPU in your machine.
             molnet_pairs = []
