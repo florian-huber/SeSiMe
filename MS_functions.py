@@ -1023,6 +1023,43 @@ def evaluate_measure(spectra_dict,
     return mol_sim, spec_sim, spec_idx, reference_list
 
 
+def cosine_score(spectrum1, spectrum2, tol, min_match, min_intens = 0):
+    if len(spectrum1.peaks) == 0 or len(spectrum2.peaks) == 0:
+        return 0.0,[]
+
+    spec1 = np.array(spectrum1.peaks, dtype=float)
+    spec2 = np.array(spectrum2.peaks, dtype=float)
+    
+    # normalize intensities:
+    spec1[:,1] = spec1[:,1]/max(spec1[:,1])
+    spec2[:,1] = spec2[:,1]/max(spec2[:,1])
+    
+    # filter, if wanted:
+    spec1 = spec1[spec1[:,1] > min_intens,:]
+    spec2 = spec2[spec2[:,1] > min_intens,:]
+    
+    zero_pairs = find_pairs(spec1, spec2, tol, shift=0.0)
+    zero_pairs = sorted(zero_pairs, key = lambda x: x[2], reverse = True)
+
+    used1 = set()
+    used2 = set()
+    score = 0.0
+    used_matches = []
+    for m in zero_pairs:
+        if not m[0] in used1 and not m[1] in used2:
+            score += m[2]
+            used1.add(m[0])
+            used2.add(m[1])
+            used_matches.append(m)
+    
+    if len(used_matches) < min_match:
+        score = 0.0
+    else:     
+        # Normalize score:
+        score = score/max(np.sum(spec1[:,1]**2), np.sum(spec2[:,1]**2))
+    
+    return score
+
 """
 From Simon Rogers
 molnet
@@ -1167,6 +1204,121 @@ def fast_cosine_shift_hungarian(spectrum1, spectrum2, tol, min_match, min_intens
     return score
 
 
+def cosine_matrix_fast(spectra,
+                       tol,
+                       max_mz, 
+                       min_mz = 0):
+    
+    from scipy import spatial
+    
+    for i, spectrum in enumerate(spectra):
+        spec = np.array(spectrum.peaks.copy(), dtype=float)
+
+        # Normalize intensities:
+        spec[:,1] = spec[:,1]/np.max(spec[:,1])
+        
+        if i == 0:
+            vector = one_hot_spectrum(spec, tol, max_mz, shift = 0, min_mz = min_mz)
+            spec_vectors = np.zeros((len(spectra), vector.shape[0]))
+            spec_vectors[0,:] = vector
+        else:
+            spec_vectors[i,:] = one_hot_spectrum(spec, tol, max_mz, shift = 0, min_mz = min_mz)
+    
+    Cdist = spatial.distance.cdist(spec_vectors, spec_vectors, 'cosine')
+    
+    return 1 - Cdist
+
+
+def cosine_matrix(spectra, 
+                  tol, 
+                  max_mz, min_mz = 0, 
+                  min_match = 2, min_intens = 0.01,
+                  filename = None,
+                  num_workers = 4):
+    """ Create Matrix of all cosine similarities.
+    
+    spectra: list
+        List of spectra (of Spectrum class)
+    tol: float
+        Tolerance to still count peaks a match (mz +- tolerance).
+    max_mz: float
+        Maxium m-z mass to take into account
+    min_mz: float 
+        Minimum m-z mass to take into account
+    min_match: int
+        Minimum numbe of peaks that need to be matches. Otherwise score will be set to 0
+    min_intens: float
+        Sets the minimum relative intensity peaks must have to be looked at for potential matches.
+    filename: str/ None
+        Filename to look for existing npy-file with molent matrix. Or, if not found, to 
+        use to save the newly calculated matrix.
+    num_workers: int
+        Number of threads to use for calculation.
+    """  
+    if filename is not None:
+        try: 
+            cosine_sim = np.load(filename)
+            # Check if matrix was calculated to the end:
+            diagonal = molnet_sim.diagonal()
+            if np.min(diagonal) == 0:
+                print("Uncomplete cosine similarity scores found and loaded.")
+                missing_scores = np.where(diagonal == 0)[0].astype(int)     
+                print("Missing cosine scores will be calculated.")
+                counter_total = int((len(spectra)**2)/2)
+                counter_init = counter_total - np.sum(len(spectra) - missing_scores)
+#                n_start = max(0, np.where(diagonal == 0)[0][0] -1 )
+#                counter_init = (n_start-1) * len(spectra) - ((n_start-1)**2 - (n_start-1))/2
+                print("About ", 100*(counter_init/counter_total),"% of the values already completed.")
+                collect_new_data = True
+            else:    
+                print("Complete cosine similarity scores found and loaded.")
+#                n_start = 0
+                missing_scores = []
+                counter_init = 0
+                collect_new_data = False
+                
+        except FileNotFoundError: 
+            print("Could not find file ", filename) 
+            print("Cosine scores will be calculated from scratch.")
+            collect_new_data = True
+#            n_start = 0
+            missing_scores = np.arange(0,len(spectra))
+            counter_init = 0
+    
+    if collect_new_data == True:  
+        if counter_init == 0:
+            cosine_sim = np.zeros((len(spectra), len(spectra)))
+
+        counter = counter_init
+        print("Calculate pairwise cosine scores by ", num_workers, "number of workers.")
+        for i in missing_scores: #range(n_start, len(spectra)):
+            parameter_collection = []    
+            for j in range(i,len(spectra)):
+                parameter_collection.append([spectra[i], spectra[j], i, j, tol, min_match, min_intens, counter])
+                counter += 1
+
+            # Create a pool of processes. For instance one for each CPU in your machine.
+            cosine_pairs = []
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                futures = [executor.submit(cosine_pair, X, len(spectra)) for X in parameter_collection]
+                cosine_pairs.append(futures)
+             
+            for m, future in enumerate(cosine_pairs[0]):
+                spec_i, spec_j, ind_i, ind_j, _, _, _, counting = parameter_collection[m]
+                cosine_sim[ind_i,ind_j] = future.result()
+
+
+        # Symmetric matrix --> fill        
+        for i in range(1,len(spectra)):
+            for j in range(i):  
+                cosine_sim[i,j] =cosine_sim[j,i]      
+    
+        if filename is not None:
+            np.save(filename, cosine_sim)
+            
+    return cosine_sim
+
+
 def molnet_matrix(spectra, 
                   tol, 
                   max_mz, min_mz = 0, 
@@ -1268,6 +1420,19 @@ def molnet_matrix(spectra,
             np.save(filename, molnet_sim)
             
     return molnet_sim
+
+
+def cosine_pair(X, len_spectra):
+    """ Single molnet pair calculation
+    """ 
+    spectra_i, spectra_j, i, j, tol, min_match, min_intens, counter = X
+    cosine_pair = cosine_score(spectra_i, spectra_j, tol, min_match, min_intens = min_intens)
+
+
+    if (counter+1) % 1000 == 0 or counter == len_spectra-1:  
+        print('\r', ' Calculated cosine for pair ', i, '--', j, '. ( ', np.round(200*(counter+1)/len_spectra**2, 2), ' % done).', end="")
+
+    return cosine_pair
 
 
 def molnet_pair(X, len_spectra):
