@@ -1042,10 +1042,6 @@ def fast_cosine_shift(spectrum1, spectrum2, tol, min_match, min_intens = 0):
     spec1 = spec1[spec1[:,1] > min_intens,:]
     spec2 = spec2[spec2[:,1] > min_intens,:]
     
-#    # Sort by peak m/z:
-#    spec1 = spec1[np.lexsort((spec1[:,1], spec1[:,0])),:]
-#    spec2 = spec2[np.lexsort((spec2[:,1], spec2[:,0])),:]
-    
     zero_pairs = find_pairs(spec1, spec2, tol, shift=0.0)
 
     shift = spectrum1.parent_mz - spectrum2.parent_mz
