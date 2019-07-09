@@ -519,7 +519,6 @@ class SimilarityMeasures():
             else:
                 print("No tfidf model found.")
             print("Using present tfidf model.")
-            TfidfModel.save
             
         vector_size = self.model_word2vec.wv.vector_size
         vectors_centroid = []
