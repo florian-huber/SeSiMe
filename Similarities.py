@@ -448,7 +448,7 @@ class SimilarityMeasures():
 ##
 ## -------------------- Calculate document vectors -------------------------------------
 ## 
-    def get_vectors_centroid(self, method = 'update', extra_weights = None, tfidf_weighted=True):
+    def get_vectors_centroid(self, method = 'update', extra_weights = None, tfidf_weighted=True, extra_epochs = 10):
         """ Calculate centroid vectors for all documents
         
         Individual word vectors are weighted using tfidf (unless weighted=False).
@@ -464,6 +464,8 @@ class SimilarityMeasures():
             List of extra weights for add documents (and every word). Set to "None" if not used.
         tfidf_weighted: bool
             True, False
+        extra_epochs: int
+            Number of extra epochs to train IF method is 'update' and missing words are detected.
         """
         # TODO  maybe move the update section to the build_model function?
         # TODO  add place to specify how many epochs the update-training should take
@@ -488,7 +490,7 @@ class SimilarityMeasures():
             if method == 'update':
                 print("The word2vec model will hence be updated by additional training.")
                 self.model_word2vec.build_vocab(self.corpus, update=True)
-                self.model_word2vec.train(self.corpus, total_examples=len(self.corpus), epochs = 5)
+                self.model_word2vec.train(self.corpus, total_examples=len(self.corpus), epochs = extra_epochs)
                 self.model_word2vec.save('newmodel')
                 
             elif method == 'ignore':
