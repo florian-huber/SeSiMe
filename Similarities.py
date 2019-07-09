@@ -448,7 +448,11 @@ class SimilarityMeasures():
 ##
 ## -------------------- Calculate document vectors -------------------------------------
 ## 
-    def get_vectors_centroid(self, method = 'update', extra_weights = None, tfidf_weighted=True, extra_epochs = 10):
+    def get_vectors_centroid(self, method = 'update', 
+                             extra_weights = None, 
+                             tfidf_weighted=True, 
+                             weight_method = 'sqrt', 
+                             extra_epochs = 10):
         """ Calculate centroid vectors for all documents
         
         Individual word vectors are weighted using tfidf (unless weighted=False).
@@ -464,11 +468,14 @@ class SimilarityMeasures():
             List of extra weights for add documents (and every word). Set to "None" if not used.
         tfidf_weighted: bool
             True, False
+        weight_method: str
+            Select method for how to weigh the extra_weights...
+            'sqrt' - weight word vectors by sqrt or extra_weights
+            None
         extra_epochs: int
             Number of extra epochs to train IF method is 'update' and missing words are detected.
         """
         # TODO  maybe move the update section to the build_model function?
-        # TODO  add place to specify how many epochs the update-training should take
         
         # Check if everything is there:
         # 1) Check if model and bow-corpus are present
@@ -511,12 +518,16 @@ class SimilarityMeasures():
             document = [self.dictionary[x[0]] for x in self.bow_corpus[i]]
             if extra_weights is not None:
                 document_weight = [extra_weights[i][self.initial_documents[i].index(self.dictionary[x[0]])] for x in self.bow_corpus[i]]
-                document_weight = np.array(document_weight)
+                document_weight = np.array(document_weight)/np.max(document_weight)  # normalize
                 if len(document_weight) == 0:
                     print("Something might have gone wrong with: ", i)
                     np.ones((len(document)))
+                elif weight_method == 'sqrt':
+                    document_weight = np.sqrt(document_weight)  # idea: take sqrt to make huge intensity differences less severe
+                elif weight_method is None:
+                    pass
                 else:
-                    document_weight = np.sqrt(document_weight/np.max(document_weight))  # idea: take sqrt to make huge intensity differences less severe
+                    print("Unkown weight adding method.")
             else:
                 document_weight = np.ones((len(document)))
             if len(document) > 0:
