@@ -728,16 +728,21 @@ def create_modified_MS_documents(spectra,
             low_limit = (1/max_word_multiply)**(1/word_multiply_scaling)
             loss_multiply[loss_multiply < low_limit] = low_limit
             loss_multiply = (loss_multiply**word_multiply_scaling).astype(int)
+            losses_mz = np.round(losses[:,0], decimals = num_decimals)
 
         if (spec_id+1) % 100 == 0 or spec_id == len(spectra)-1:  # show progress
                 print('\r', ' Created documents for ', spec_id+1, ' of ', len(spectra), ' spectra.', end="")
-                
+        
+        peaks_mz = np.round(peaks[:,0], decimals =2)
+        
         for i in range(len(peaks)):
-            doc.extend(word_multiply[i]*[peak_loss_words[0] + "{:.{}f}".format(peaks[i,0], num_decimals)])
+            #doc.extend(word_multiply[i]*[peak_loss_words[0] + "{:.{}f}".format(peaks[i,0], num_decimals)])
+            doc.extend(word_multiply[i]*[peak_loss_words[0] + str(peaks_mz[i])])
             doc_intensity.extend(word_multiply[i]*[int(peaks[i,1])])
             
         for i in range(len(losses)):
-            doc.extend(loss_multiply[i]*[peak_loss_words[1]  + "{:.{}f}".format(losses[i,0], num_decimals)])
+            #doc.extend(loss_multiply[i]*[peak_loss_words[1]  + "{:.{}f}".format(losses[i,0], num_decimals)])
+            doc.extend(loss_multiply[i]*[peak_loss_words[1]  + str(losses_mz[i])])
             doc_intensity.extend(loss_multiply[i]*[int(losses[i,1])])
 
         MS_documents.append(doc)
