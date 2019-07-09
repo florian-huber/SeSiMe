@@ -727,7 +727,7 @@ def create_modified_MS_documents(spectra,
             loss_multiply = (losses[:,1]/np.max(losses[:,1]))
             low_limit = (1/max_word_multiply)**(1/word_multiply_scaling)
             loss_multiply[loss_multiply < low_limit] = low_limit
-            loss_multiply = (loss_multiply**word_multiply_scaling).astype(int)
+            loss_multiply = (max_word_multiply*(loss_multiply**word_multiply_scaling)).astype(int)
             losses_mz = np.round(losses[:,0], decimals = num_decimals)
 
         if (spec_id+1) % 100 == 0 or spec_id == len(spectra)-1:  # show progress
