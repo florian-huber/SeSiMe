@@ -668,6 +668,87 @@ def create_MS_documents(spectra, num_decimals, peak_loss_words = ['peak_', 'loss
     return MS_documents, MS_documents_intensity, spectra_metadata
 
 
+def create_modified_MS_documents(spectra, 
+                                 num_decimals, 
+                                 peak_loss_words = ['peak_', 'loss_'],
+                                 max_word_multiply = 10, 
+                                 word_multiply_scaling = 0.5,
+                                 min_loss = 10.0, 
+                                 max_loss = 200.0):
+    """ Create documents from peaks and losses.
+    
+    Every peak and every loss will be transformed into a WORD.
+    Words then look like this: "peak_100.038" or "loss_59.240" 
+    
+    Args:
+    --------
+    spectra: list
+        List of all spectrum class elements = all spectra to be in corpus
+    num_decimals: int
+        Number of decimals to take into account
+    peak_loss_words: list of strings
+        Give string to add to each peak and each loss "word".
+    max_word_multiply: int
+        Add more words for higher intensity peaks/losses. Up to max_word_multiply times.
+    word_multiply_scaling: float
+        Exponent of how to scale peak intensities to translate into amount of words for documents.
+    min_loss: float
+        Lower limit of losses to take into account (Default = 10.0).
+    max_loss: float
+        Upper limit of losses to take into account (Default = 200.0).
+    """
+    MS_documents = []
+    MS_documents_intensity = []
+    spectra_metadata = pd.DataFrame(columns=['doc_ID', 'spectrum_ID', 'sub_ID', 'parent_mz', 'parent_intensity', 'no_peaks_losses'])
+    
+    for spec_id, spectrum in enumerate(spectra):
+        doc = []
+        doc_intensity = []
+        losses = np.array(spectrum.losses)
+        if len(losses) > 0: 
+            keep_idx = np.where((losses[:,0] > min_loss) & (losses[:,0] < max_loss))[0]
+            losses = losses[keep_idx,:]
+        else:
+            print("No losses detected for: ", spec_id, spectrum.id)
+        peaks = np.array(spectrum.peaks)
+        
+        # Calculate how to multiply high-intensity "words"
+        word_multiply = (peaks[:,1]/np.max(peaks[:,1]))
+        low_limit = (1/max_word_multiply)**(1/word_multiply_scaling)
+        word_multiply[word_multiply < low_limit] = low_limit
+        word_multiply = (max_word_multiply*(word_multiply**word_multiply_scaling)).astype(int)
+        
+        # Sort peaks and losses by m/z 
+        peaks = peaks[np.lexsort((peaks[:,1], peaks[:,0])),:]
+        if len(losses) > 0: 
+            losses = losses[np.lexsort((losses[:,1], losses[:,0])),:]
+
+            # Calculate how to multiply high-intensity "words"
+            loss_multiply = (losses[:,1]/np.max(losses[:,1]))
+            low_limit = (1/max_word_multiply)**(1/word_multiply_scaling)
+            loss_multiply[loss_multiply < low_limit] = low_limit
+            loss_multiply = (loss_multiply**word_multiply_scaling).astype(int)
+
+        if (spec_id+1) % 100 == 0 or spec_id == len(spectra)-1:  # show progress
+                print('\r', ' Created documents for ', spec_id+1, ' of ', len(spectra), ' spectra.', end="")
+                
+        for i in range(len(peaks)):
+            doc.extend(word_multiply[i]*[peak_loss_words[0] + "{:.{}f}".format(peaks[i,0], num_decimals)])
+            doc_intensity.extend(word_multiply[i]*[int(peaks[i,1])])
+            
+        for i in range(len(losses)):
+            doc.extend(loss_multiply[i]*[peak_loss_words[1]  + "{:.{}f}".format(losses[i,0], num_decimals)])
+            doc_intensity.extend(loss_multiply[i]*[int(losses[i,1])])
+
+        MS_documents.append(doc)
+        MS_documents_intensity.append(doc_intensity)
+        spectra_metadata.loc[spec_id] = [spec_id, int(spectrum.id), 0, spectrum.parent_mz, 1, len(doc)]
+         
+    return MS_documents, MS_documents_intensity, spectra_metadata
+
+
+
+
 def create_subspectra_documents(spectra, num_decimals, 
                                 min_loss = 10.0, max_loss = 200.0,
                                 main_peak_cutoff = 0.2,
