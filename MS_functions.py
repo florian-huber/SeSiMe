@@ -733,7 +733,7 @@ def create_modified_MS_documents(spectra,
         if (spec_id+1) % 100 == 0 or spec_id == len(spectra)-1:  # show progress
                 print('\r', ' Created documents for ', spec_id+1, ' of ', len(spectra), ' spectra.', end="")
         
-        peaks_mz = np.round(peaks[:,0], decimals =2)
+        peaks_mz = np.round(peaks[:,0], decimals = num_decimals)
         
         for i in range(len(peaks)):
             #doc.extend(word_multiply[i]*[peak_loss_words[0] + "{:.{}f}".format(peaks[i,0], num_decimals)])
