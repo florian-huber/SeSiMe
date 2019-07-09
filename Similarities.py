@@ -452,6 +452,7 @@ class SimilarityMeasures():
                              extra_weights = None, 
                              tfidf_weighted=True, 
                              weight_method = 'sqrt', 
+                             tfidf_model = None,
                              extra_epochs = 10):
         """ Calculate centroid vectors for all documents
         
@@ -472,6 +473,8 @@ class SimilarityMeasures():
             Select method for how to weigh the extra_weights...
             'sqrt' - weight word vectors by sqrt or extra_weights
             None
+        tfidf_model: str
+            Give filename if pre-defined tfidf model should be used. Otherwise set to None.
         extra_epochs: int
             Number of extra epochs to train IF method is 'update' and missing words are detected.
         """
@@ -507,7 +510,17 @@ class SimilarityMeasures():
         else:
             print("All 'words' of the given documents were found in the trained word2vec model.")
         
-        self.tfidf = models.TfidfModel(self.bow_corpus)
+        if tfidf_model is not None:
+            self.tfidf = models.TfidfModel.load(tfidf_model)
+            print("Tfidf model found and loaded.")
+        else:
+            if self.tfidf is not None:
+                self.tfidf = models.TfidfModel(self.bow_corpus)
+            else:
+                print("No tfidf model found.")
+            print("Using present tfidf model.")
+            TfidfModel.save
+            
         vector_size = self.model_word2vec.wv.vector_size
         vectors_centroid = []
         
