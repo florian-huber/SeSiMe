@@ -30,7 +30,7 @@ def preprocess_document(corpus, stopwords, min_frequency = 2):
     
     frequency = defaultdict(int)
     for text in texts:
-        for token in text:
+        for token in list(set(text)):
             frequency[token] += 1
     
     texts = [[token for token in text if frequency[token] >= min_frequency] for text in texts]
