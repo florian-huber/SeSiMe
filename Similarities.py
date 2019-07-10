@@ -514,11 +514,12 @@ class SimilarityMeasures():
             self.tfidf = models.TfidfModel.load(tfidf_model)
             print("Tfidf model found and loaded.")
         else:
-            if self.tfidf is not None:
+            if self.tfidf is None:
                 self.tfidf = models.TfidfModel(self.bow_corpus)
-            else:
                 print("No tfidf model found.")
-            print("Using present tfidf model.")
+            else:
+                print("Using present tfidf model.")
+            
             
         vector_size = self.model_word2vec.wv.vector_size
         vectors_centroid = []
