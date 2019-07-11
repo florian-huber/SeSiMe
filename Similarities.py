@@ -508,7 +508,9 @@ class SimilarityMeasures():
                 
                 _, missing_vocab = zip(*test_vocab)
                 print("Removing missing 'words' from corpus...")
+                # Update corpus and BOW-corpus
                 self.corpus = [[word for word in document if word not in missing_vocab] for document in self.corpus]
+                self.bow_corpus = [self.dictionary.doc2bow(text) for text in self.corpus]
                 # TODO: add check with word intensities 
             else:
                 print("Given method how do deal with missing words could not be found.")
