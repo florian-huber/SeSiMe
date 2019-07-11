@@ -505,8 +505,13 @@ class SimilarityMeasures():
                 
             elif method == 'ignore':
                 print("'Words'missing in the pretrained word2vec model will be ignored.")
+                
+                _, missing_vocab = zip(*test_vocab)
+                print("Removing missing 'words' from corpus...")
+                self.corpus = [[word for word in document if word not in missing_vocab] for document in self.corpus]
+                # TODO: add check with word intensities 
             else:
-                print("Given method how do deal with missing words in pretrained model not found.")
+                print("Given method how do deal with missing words could not be found.")
         else:
             print("All 'words' of the given documents were found in the trained word2vec model.")
         
