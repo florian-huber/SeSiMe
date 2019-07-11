@@ -612,8 +612,12 @@ def load_MGF_data(path_json,
 ## --------------------------------------------------------------------------------------------------
 
 
-def create_MS_documents(spectra, num_decimals, peak_loss_words = ['peak_', 'loss_'],
-                        min_loss = 10.0, max_loss = 200.0):
+def create_MS_documents(spectra, 
+                        num_decimals, 
+                        peak_loss_words = ['peak_', 'loss_'],
+                        min_loss = 10.0, 
+                        max_loss = 200.0, 
+                        ignore_losses = False):
     """ Create documents from peaks and losses.
     
     Every peak and every loss will be transformed into a WORD.
@@ -629,6 +633,8 @@ def create_MS_documents(spectra, num_decimals, peak_loss_words = ['peak_', 'loss
         Lower limit of losses to take into account (Default = 10.0).
     max_loss: float
         Upper limit of losses to take into account (Default = 200.0).
+    ignore_losses: bool
+        True: Ignore losses, False: make words from losses and peaks.
     """
     MS_documents = []
     MS_documents_intensity = []
@@ -637,18 +643,21 @@ def create_MS_documents(spectra, num_decimals, peak_loss_words = ['peak_', 'loss
     for spec_id, spectrum in enumerate(spectra):
         doc = []
         doc_intensity = []
-        losses = np.array(spectrum.losses)
-        if len(losses) > 0: 
-            keep_idx = np.where((losses[:,0] > min_loss) & (losses[:,0] < max_loss))[0]
-            losses = losses[keep_idx,:]
-        else:
-            print("No losses detected for: ", spec_id, spectrum.id)
+        if not ignore_losses:
+            losses = np.array(spectrum.losses)
+            if len(losses) > 0: 
+                keep_idx = np.where((losses[:,0] > min_loss) & (losses[:,0] < max_loss))[0]
+                losses = losses[keep_idx,:]
+            else:
+                print("No losses detected for: ", spec_id, spectrum.id)
+
         peaks = np.array(spectrum.peaks)
         
         # Sort peaks and losses by m/z 
         peaks = peaks[np.lexsort((peaks[:,1], peaks[:,0])),:]
-        if len(losses) > 0: 
-            losses = losses[np.lexsort((losses[:,1], losses[:,0])),:]
+        if not ignore_losses:
+            if len(losses) > 0: 
+                losses = losses[np.lexsort((losses[:,1], losses[:,0])),:]
 
         if (spec_id+1) % 100 == 0 or spec_id == len(spectra)-1:  # show progress
                 print('\r', ' Created documents for ', spec_id+1, ' of ', len(spectra), ' spectra.', end="")
@@ -656,10 +665,10 @@ def create_MS_documents(spectra, num_decimals, peak_loss_words = ['peak_', 'loss
         for i in range(len(peaks)):
             doc.append(peak_loss_words[0] + "{:.{}f}".format(peaks[i,0], num_decimals))
             doc_intensity.append(int(peaks[i,1]))
-            
-        for i in range(len(losses)):
-            doc.append(peak_loss_words[1]  + "{:.{}f}".format(losses[i,0], num_decimals))
-            doc_intensity.append(int(losses[i,1]))
+        if not ignore_losses:    
+            for i in range(len(losses)):
+                doc.append(peak_loss_words[1]  + "{:.{}f}".format(losses[i,0], num_decimals))
+                doc_intensity.append(int(losses[i,1]))
 
         MS_documents.append(doc)
         MS_documents_intensity.append(doc_intensity)
@@ -1831,7 +1840,122 @@ def plot_losses(spectra, compare_ids, min_loss = 0, max_loss = 500):
     print("Number of peaks: ", losses_number)
 
 
+def plot_spectra_comparison(MS_measure,
+                            spectra,
+                            num_decimals,
+                            ID1, ID2, 
+                            min_mz = 5, 
+                            max_mz = 500,
+                            threshold = 0.01):
+    """
 
+    """
+    from scipy import spatial
+    import matplotlib
+    plot_colors = ['darkcyan', 'purple']#['seagreen', 'steelblue']#['darkcyan', 'firebrick']
+    
+    
+    # definitions for the axes
+    left, width = 0.1, 0.65
+    bottom, height = 0.1, 0.65
+    spacing = 0.005
+#    cbar_space = 0.1
+
+    rect_wordsim = [left, bottom, width, height]
+    rect_specx = [left, bottom + height + spacing, width, 0.2]
+    rect_specy = [left + width, bottom, 0.2, height]
+#    rect_cbar = [left, bottom, width, cbar_space]
+    
+    
+    peaks1 = np.array(spectra[ID1].peaks.copy())
+    peaks2 = np.array(spectra[ID2].peaks.copy())
+#    peak_number.append(len(peaks))
+#    max_intens = max(np.max(peaks1[:,1]), np.max(peaks2[:,1])) 
+    peaks1[:,1] = peaks1[:,1]/np.max(peaks1[:,1])
+    peaks2[:,1] = peaks2[:,1]/np.max(peaks2[:,1])
+    
+    # remove peaks lower than threshold
+    select1 = np.where((peaks1[:,1] > threshold) & (peaks1[:,0] <= max_mz) & (peaks1[:,0] >= min_mz))[0]
+    select2 = np.where((peaks2[:,1] > threshold) & (peaks2[:,0] <= max_mz) & (peaks2[:,0] >= min_mz))[0]
+    peaks1 = peaks1[select1, :]
+    peaks2 = peaks2[select2, :] 
+    
+    
+    MS_documents, MS_documents_intensity, _ = create_MS_documents([spectra[x] for x in [ID1,ID2]], 
+                                                                 num_decimals = num_decimals, 
+                                                                 peak_loss_words = ['peak_', 'loss_'],
+                                                                 min_loss = 0, 
+                                                                 max_loss = 1000.00,
+                                                                 ignore_losses = True)
+    
+    word_vectors1 = MS_measure.model_word2vec.wv[MS_documents[0]]
+    word_vectors2 = MS_measure.model_word2vec.wv[MS_documents[1]]
+#    intensities1 = np.array(MS_documents_intensity[0])
+#    intensities2 = np.array(MS_documents_intensity[1])
+#    select1 = np.where((intensities1/np.max(intensities1)) > threshold)[0]
+#    select2 = np.where((intensities2/np.max(intensities2)) > threshold)[0]
+    
+    Cdist_words = 1 - spatial.distance.cdist(word_vectors1[select1], word_vectors2[select2], 'cosine')
+    
+
+    # Plot spectra
+    fig = plt.figure(figsize=(8, 8))
+    
+    ax_wordsim = plt.axes(rect_wordsim)
+    ax_wordsim.tick_params(direction='in', top=True, right=True)
+    ax_specx = plt.axes(rect_specx)
+    ax_specx.tick_params(direction='in', labelbottom=False)
+    ax_specy = plt.axes(rect_specy)
+    ax_specy.tick_params(direction='in', labelleft=False)
+#    ax_cbar= fig.add_axes(rect_cbar)
+    
+    # Word similarity plot:
+    data_x = []
+    data_y = []
+    data_z = []
+    for i in range(len(select1)):
+        for j in range(len(select2)):
+            data_x.append(peaks1[i,0])
+            data_y.append(peaks2[j,0])
+            data_z.append(Cdist_words[i,j])
+
+    cm = plt.cm.get_cmap('PuRd') #PuRdYlGn('RdYlBu')
+    
+    ax_wordsim.scatter(data_x, data_y, s = 800*np.array(data_z), c= data_z, cmap=cm, alpha=0.4) #s = 10000*np.array(data_z)**2
+#    ax_wordsim = plt.xlabel('m/z spectrum 2')
+#    plt.ylabel('m/z spectrum 1')  
+
+    zero_pairs = find_pairs(peaks1, peaks2, tol= 0.2, shift=0.0)
+    zero_pairs = sorted(zero_pairs, key = lambda x: x[2], reverse = True)
+    idx1, idx2, _ = zip(*zero_pairs)
+    cosine_x = []
+    cosine_y = []
+    for i in range(len(idx1)):
+        cosine_x.append(peaks1[idx1[i],0])
+        cosine_y.append(peaks2[idx2[i],0])
+    ax_wordsim.scatter(cosine_x, cosine_y, s= 75, c = 'black')    
+
+    ax_specx.vlines(peaks1[:,0], [0], peaks1[:,1], color=plot_colors[0])
+    ax_specx.plot(peaks1[:,0], peaks1[:,1], '.')  # Stem ends
+    ax_specx.plot([peaks1[:,0].max(), peaks1[:,0].min()], [0, 0],  '--')  # Middle bar
+#    plt.title('Spectrum 1')
+    
+    ax_specy.hlines(peaks2[:,0], [0], peaks2[:,1], color=plot_colors[1])
+    ax_specy.plot(peaks2[:,1], peaks2[:,0], '.')  # Stem ends
+    ax_specy.plot([0, 0], [peaks2[:,0].min(), peaks2[:,0].max()], '--')  # Middle bar
+#    plt.title('Spectrum 2')
+
+#    # Optionally add a colorbar
+#    max_color = np.max(data_z)
+#    min_color = np.min(data_z)
+#    color_ticks = np.round(np.linspace(min_color, max_color, 6),2)
+#    cax, _ = matplotlib.colorbar.make_axes(ax_cbar)
+#    cbar = matplotlib.colorbar.ColorbarBase(cax, orientation="horizontal", cmap=cm, ticks=[0, 0.2, 0.4, 0.6, 0.8, 1])
+#    cbar.ax.set_yticklabels([x for x in list(color_ticks)])
+    
+    plt.show()
+    
+    return Cdist_words
 
 
 def plot_smiles(query_id, spectra, MS_measure, num_candidates = 10,
