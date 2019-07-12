@@ -1888,18 +1888,18 @@ def plot_spectra_comparison(MS_measure,
                                                                  max_loss = 1000.00,
                                                                  ignore_losses = True)
     
-    word_vectors1 = MS_measure.model_word2vec.wv[MS_documents[0]]
-    word_vectors2 = MS_measure.model_word2vec.wv[MS_documents[1]]
+    word_vectors1 = MS_measure.model_word2vec.wv[[MS_documents[0][x] for x in select1]]
+    word_vectors2 = MS_measure.model_word2vec.wv[[MS_documents[1][x] for x in select2]]
 #    intensities1 = np.array(MS_documents_intensity[0])
 #    intensities2 = np.array(MS_documents_intensity[1])
 #    select1 = np.where((intensities1/np.max(intensities1)) > threshold)[0]
 #    select2 = np.where((intensities2/np.max(intensities2)) > threshold)[0]
     
-    Cdist_words = 1 - spatial.distance.cdist(word_vectors1[select1], word_vectors2[select2], 'cosine')
+    Cdist_words = 1 - spatial.distance.cdist(word_vectors1, word_vectors2, 'cosine')
     
 
     # Plot spectra
-    fig = plt.figure(figsize=(8, 8))
+    fig = plt.figure(figsize=(12, 12))
     
     ax_wordsim = plt.axes(rect_wordsim)
     ax_wordsim.tick_params(direction='in', top=True, right=True)
@@ -1919,9 +1919,10 @@ def plot_spectra_comparison(MS_measure,
             data_y.append(peaks2[j,0])
             data_z.append(Cdist_words[i,j])
 
+
     cm = plt.cm.get_cmap('PuRd') #PuRdYlGn('RdYlBu')
     
-    ax_wordsim.scatter(data_x, data_y, s = 800*np.array(data_z), c= data_z, cmap=cm, alpha=0.4) #s = 10000*np.array(data_z)**2
+    ax_wordsim.scatter(data_x, data_y, s = 500*np.array(data_z)**2, c= data_z, cmap=cm, alpha=0.4) #s = 10000*np.array(data_z)**2
 #    ax_wordsim = plt.xlabel('m/z spectrum 2')
 #    plt.ylabel('m/z spectrum 1')  
 
@@ -1933,7 +1934,7 @@ def plot_spectra_comparison(MS_measure,
     for i in range(len(idx1)):
         cosine_x.append(peaks1[idx1[i],0])
         cosine_y.append(peaks2[idx2[i],0])
-    ax_wordsim.scatter(cosine_x, cosine_y, s= 75, c = 'black')    
+    ax_wordsim.scatter(cosine_x, cosine_y, s= 50, c = 'black')    
 
     ax_specx.vlines(peaks1[:,0], [0], peaks1[:,1], color=plot_colors[0])
     ax_specx.plot(peaks1[:,0], peaks1[:,1], '.')  # Stem ends
