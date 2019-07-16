@@ -1846,7 +1846,9 @@ def plot_spectra_comparison(MS_measure,
                             ID1, ID2, 
                             min_mz = 5, 
                             max_mz = 500,
-                            threshold = 0.01):
+                            threshold = 0.01,
+                            wordsim_cutoff = 0.5,
+                            plot_molecules = False):
     """
 
     """
@@ -1855,7 +1857,7 @@ def plot_spectra_comparison(MS_measure,
     plot_colors = ['darkcyan', 'purple']#['seagreen', 'steelblue']#['darkcyan', 'firebrick']
     
     
-    # definitions for the axes
+    # Definitions for the axes
     left, width = 0.1, 0.65
     bottom, height = 0.1, 0.65
     spacing = 0.005
@@ -1874,13 +1876,12 @@ def plot_spectra_comparison(MS_measure,
     peaks1[:,1] = peaks1[:,1]/np.max(peaks1[:,1])
     peaks2[:,1] = peaks2[:,1]/np.max(peaks2[:,1])
     
-    # remove peaks lower than threshold
+    # Remove peaks lower than threshold
+    dictionary = [MS_measure.dictionary[x] for x in MS_measure.dictionary]
     select1 = np.where((peaks1[:,1] > threshold) & (peaks1[:,0] <= max_mz) & (peaks1[:,0] >= min_mz))[0]
     select2 = np.where((peaks2[:,1] > threshold) & (peaks2[:,0] <= max_mz) & (peaks2[:,0] >= min_mz))[0]
-    peaks1 = peaks1[select1, :]
-    peaks2 = peaks2[select2, :] 
     
-    
+    # TODO: only include sub-function to create documents...
     MS_documents, MS_documents_intensity, _ = create_MS_documents([spectra[x] for x in [ID1,ID2]], 
                                                                  num_decimals = num_decimals, 
                                                                  peak_loss_words = ['peak_', 'loss_'],
@@ -1888,14 +1889,18 @@ def plot_spectra_comparison(MS_measure,
                                                                  max_loss = 1000.00,
                                                                  ignore_losses = True)
     
+    # Remove words/peaks that are not in dictionary
+    select1 = np.array([x for x in select1 if MS_documents[0][x] in dictionary])    
+    select2 = np.array([x for x in select2 if MS_documents[1][x] in dictionary])    
+    
+    peaks1 = peaks1[select1, :]
+    peaks2 = peaks2[select2, :] 
+
     word_vectors1 = MS_measure.model_word2vec.wv[[MS_documents[0][x] for x in select1]]
     word_vectors2 = MS_measure.model_word2vec.wv[[MS_documents[1][x] for x in select2]]
-#    intensities1 = np.array(MS_documents_intensity[0])
-#    intensities2 = np.array(MS_documents_intensity[1])
-#    select1 = np.where((intensities1/np.max(intensities1)) > threshold)[0]
-#    select2 = np.where((intensities2/np.max(intensities2)) > threshold)[0]
     
-    Cdist_words = 1 - spatial.distance.cdist(word_vectors1, word_vectors2, 'cosine')
+    Csim_words = 1 - spatial.distance.cdist(word_vectors1, word_vectors2, 'cosine')
+    Csim_words[Csim_words < wordsim_cutoff] = 0  # Remove values below cutoff
     
 
     # Plot spectra
@@ -1917,7 +1922,7 @@ def plot_spectra_comparison(MS_measure,
         for j in range(len(select2)):
             data_x.append(peaks1[i,0])
             data_y.append(peaks2[j,0])
-            data_z.append(Cdist_words[i,j])
+            data_z.append(Csim_words[i,j])
 
 
     cm = plt.cm.get_cmap('PuRd') #PuRdYlGn('RdYlBu')
@@ -1956,7 +1961,20 @@ def plot_spectra_comparison(MS_measure,
     
     plt.show()
     
-    return Cdist_words
+    # Plot smiles
+    if plot_molecules:
+        size = (500, 500)
+        smiles = []  
+        for i, candidate_id in enumerate([ID1, ID2]):
+            smiles.append(spectra[candidate_id].metadata["smiles"])
+            mol = Chem.MolFromSmiles(smiles[i])
+            Draw.MolToMPL(mol, size=size, kekulize=True, wedgeBonds=True, imageType=None, fitImage=True)
+            plt.xlim((0, 2.5))
+            plt.ylim((0, 2.5))
+#            Draw.ShowMol(mol, size=size)
+#            Draw.MolToFile(mol,"molecule"+str(i)+".png")
+    
+    return Csim_words
 
 
 def plot_smiles(query_id, spectra, MS_measure, num_candidates = 10,
