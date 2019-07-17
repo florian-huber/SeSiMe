@@ -1556,7 +1556,7 @@ def tanimoto_matrix(spectra,
     
     if filename is not None:
         try: 
-            tanimoto_similarities = np.load(filename)
+            molecular_similarities = np.load(filename)
             print("Molecular similarity scores found and loaded.")
             collect_new_data = False
                 
