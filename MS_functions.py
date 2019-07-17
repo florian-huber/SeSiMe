@@ -1961,18 +1961,16 @@ def plot_spectra_comparison(MS_measure,
     
     plt.show()
     
-    # Plot smiles
+    # Plot molecules
     if plot_molecules:
-        size = (500, 500)
+        size = (200, 200)
         smiles = []  
         for i, candidate_id in enumerate([ID1, ID2]):
             smiles.append(spectra[candidate_id].metadata["smiles"])
             mol = Chem.MolFromSmiles(smiles[i])
             Draw.MolToMPL(mol, size=size, kekulize=True, wedgeBonds=True, imageType=None, fitImage=True)
-            plt.xlim((0, 2.5))
-            plt.ylim((0, 2.5))
-#            Draw.ShowMol(mol, size=size)
-#            Draw.MolToFile(mol,"molecule"+str(i)+".png")
+#            plt.xlim((0, 2.5))
+#            plt.ylim((0, 2.5))
     
     return Csim_words
 
