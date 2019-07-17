@@ -1550,19 +1550,19 @@ def molnet_pair(X, len_spectra):
 def tanimoto_matrix(spectra, 
                   fingerprints,
                   filename = None):
-    """ Create Matrix of all Tanimoto molecule similarities (based on annotated SMILES).
+    """ Create Matrix of all molecular similarities (based on annotated SMILES).
     Takes some time to calculate, so better only do it once and save as npy.
     """  
     
     if filename is not None:
         try: 
             tanimoto_similarities = np.load(filename)
-            print("Tanimoto similarity scores found and loaded.")
+            print("Molecular similarity scores found and loaded.")
             collect_new_data = False
                 
         except FileNotFoundError: 
             print("Could not find file ", filename) 
-            print("Tanimoto scores will be calculated from scratch.")
+            print("Molecular scores will be calculated from scratch.")
             collect_new_data = True
     
     if collect_new_data == True:      
@@ -1575,28 +1575,28 @@ def tanimoto_matrix(spectra,
         except AttributeError:
             fingerprint_type = "morgan" # at least assumed here
         
-        tanimoto_similarities = np.zeros((len(spectra), len(spectra)))
+        molecular_similarities = np.zeros((len(spectra), len(spectra)))
         for i in range(len(spectra)):
             # Show progress
             if (i+1) % 10 == 0 or i == len(spectra)-1:  
-                print('\r', ' Tanimoto for spectrum ', i+1, ' of ', len(spectra), ' spectra.', end="")
+                print('\r', ' Molecular similarity for spectrum ', i+1, ' of ', len(spectra), ' spectra.', end="")
             if fingerprints[i] != 0:
                 for j in range(i,len(spectra)):
                     if fingerprints[j] != 0: 
                         if fingerprint_type == "daylight":
-                            tanimoto_similarities[i,j] = DataStructs.FingerprintSimilarity(fingerprints[i], fingerprints[j])
+                            molecular_similarities[i,j] = DataStructs.FingerprintSimilarity(fingerprints[i], fingerprints[j])
                         elif fingerprint_type == "morgan":
-                            tanimoto_similarities[i,j] = DataStructs.DiceSimilarity(fingerprints[i], fingerprints[j])
+                            molecular_similarities[i,j] = DataStructs.DiceSimilarity(fingerprints[i], fingerprints[j])
         
         # Symmetric matrix --> fill        
         for i in range(1,len(spectra)):
             for j in range(i):  
-                tanimoto_similarities[i,j] = tanimoto_similarities[j,i]   
+                molecular_similarities[i,j] = molecular_similarities[j,i]   
     
         if filename is not None:
-            np.save(filename, tanimoto_similarities)
+            np.save(filename, molecular_similarities)
 
-    return tanimoto_similarities
+    return molecular_similarities
 
 
 def one_hot_spectrum(spec, tol, max_mz, shift = 0, min_mz = 0):
