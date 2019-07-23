@@ -1303,6 +1303,11 @@ def cosine_matrix_fast(spectra,
                        tol,
                        max_mz, 
                        min_mz = 0):
+    """
+    Be careful! Binning is here done by creating one-hot vectors.
+    It is hence really actual "bining" and different from the tolerance-based 
+    approach used for the cosine_matrix or molnet_matrix!
+    """
     
     from scipy import spatial
     
@@ -1313,11 +1318,11 @@ def cosine_matrix_fast(spectra,
         spec[:,1] = spec[:,1]/np.max(spec[:,1])
         
         if i == 0:
-            vector = one_hot_spectrum(spec, tol, max_mz, shift = 0, min_mz = min_mz)
+            vector = one_hot_spectrum(spec, tol, max_mz, shift = 0, min_mz = min_mz, method='max')
             spec_vectors = np.zeros((len(spectra), vector.shape[0]))
             spec_vectors[0,:] = vector
         else:
-            spec_vectors[i,:] = one_hot_spectrum(spec, tol, max_mz, shift = 0, min_mz = min_mz)
+            spec_vectors[i,:] = one_hot_spectrum(spec, tol, max_mz, shift = 0, min_mz = min_mz, method='max')
     
     Cdist = spatial.distance.cdist(spec_vectors, spec_vectors, 'cosine')
     
@@ -1411,7 +1416,7 @@ def cosine_matrix(spectra,
         # Symmetric matrix --> fill        
         for i in range(1,len(spectra)):
             for j in range(i):  
-                cosine_sim[i,j] =cosine_sim[j,i]      
+                cosine_sim[i,j] = cosine_sim[j,i]      
     
         if filename is not None:
             np.save(filename, cosine_sim)
@@ -1604,16 +1609,31 @@ def tanimoto_matrix(spectra,
     return molecular_similarities
 
 
-def one_hot_spectrum(spec, tol, max_mz, shift = 0, min_mz = 0):
+def one_hot_spectrum(spec, 
+                     tol, 
+                     max_mz, 
+                     shift = 0, 
+                     min_mz = 0,
+                     method = 'max'):
     """ Convert spectrum peaks into on-hot-vector
+    
+    method: str
+        'max' take highest intensity peak within every bin. 
+        'sum' take sum of all peaks within every bin.
     """
     dim_vector = int((max_mz - min_mz)/tol)
     one_hot_spec = np.zeros((dim_vector))
     idx = ((spec[:,0] + shift)*1/tol).astype(int)
     idx[idx>=dim_vector] = 0
     idx[idx<0] = 0
-    one_hot_spec[idx] = spec[:,1]
-    
+    if method == 'max':
+        for id1 in set(idx):
+            one_hot_spec[id1] = np.max(spec[(idx==id1),1])
+    elif method == 'sum':
+        for id1 in set(idx):
+            one_hot_spec[id1] = np.sum(spec[(idx==id1),1])
+    else:
+        print("Method not known...")
     return one_hot_spec
     
 
