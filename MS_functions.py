@@ -1307,6 +1307,8 @@ def cosine_matrix_fast(spectra,
     Be careful! Binning is here done by creating one-hot vectors.
     It is hence really actual "bining" and different from the tolerance-based 
     approach used for the cosine_matrix or molnet_matrix!
+    
+    Also: tol here is about tol/2 when compared to cosine_matrix or molnet_matrix...
     """
     
     from scipy import spatial
