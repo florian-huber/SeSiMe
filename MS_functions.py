@@ -1354,7 +1354,7 @@ def cosine_matrix(spectra,
         try: 
             cosine_sim = np.load(filename)
             # Check if matrix was calculated to the end:
-            diagonal = molnet_sim.diagonal()
+            diagonal = cosine_sim.diagonal()
             if np.min(diagonal) == 0:
                 print("Uncomplete cosine similarity scores found and loaded.")
                 missing_scores = np.where(diagonal == 0)[0].astype(int)     
