@@ -1379,6 +1379,11 @@ def cosine_matrix(spectra,
 #            n_start = 0
             missing_scores = np.arange(0,len(spectra))
             counter_init = 0
+    else:
+        print("No filename given.")    
+        print("Cosine scores will be calculated from scratch.")
+        collect_new_data = True
+        counter_init = 0
     
     if collect_new_data == True:  
         if counter_init == 0:
