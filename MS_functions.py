@@ -1414,7 +1414,6 @@ def cosine_matrix(spectra,
                 spec_i, spec_j, ind_i, ind_j, _, _, _, counting = parameter_collection[m]
                 cosine_sim[ind_i,ind_j] = future.result()
 
-
         # Symmetric matrix --> fill        
         for i in range(1,len(spectra)):
             for j in range(i):  
@@ -1491,6 +1490,10 @@ def molnet_matrix(spectra,
 #            n_start = 0
             missing_scores = np.arange(0,len(spectra))
             counter_init = 0
+    else:
+        collect_new_data = True
+        missing_scores = np.arange(0,len(spectra))
+        counter_init = 0
     
     if collect_new_data == True:  
         if counter_init == 0:
@@ -1516,7 +1519,6 @@ def molnet_matrix(spectra,
                 molnet_sim[ind_i,ind_j] = future.result()
                 if (counting+1) % safety_save == 0:
                     np.save(filename[:-4]+ str(i), molnet_sim)
-
 
         # Symmetric matrix --> fill        
         for i in range(1,len(spectra)):
