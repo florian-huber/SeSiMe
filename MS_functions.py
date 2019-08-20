@@ -1528,6 +1528,7 @@ def molnet_matrix(spectra,
                 if filename is not None:
                     if (counting+1) % safety_save == 0:
                         np.save(filename[:-4]+ str(i), molnet_sim)
+                        np.save(filename[:-4]+ "_matches_" + str(i), molnet_matches)
 
         # Symmetric matrix --> fill        
         for i in range(1,len(spectra)):
