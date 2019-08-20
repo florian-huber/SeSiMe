@@ -1118,7 +1118,7 @@ def evaluate_measure(spectra_dict,
     return mol_sim, spec_sim, spec_idx, reference_list
 
 
-def cosine_score(spectrum1, spectrum2, tol, min_match, min_intens = 0):
+def cosine_score(spectrum1, spectrum2, tol, min_intens = 0):
     if len(spectrum1.peaks) == 0 or len(spectrum2.peaks) == 0:
         return 0.0,[]
 
@@ -1147,19 +1147,19 @@ def cosine_score(spectrum1, spectrum2, tol, min_match, min_intens = 0):
             used2.add(m[1])
             used_matches.append(m)
     
-    if len(used_matches) < min_match:
-        score = 0.0
-    else:     
-        # Normalize score:
-        score = score/max(np.sum(spec1[:,1]**2), np.sum(spec2[:,1]**2))
+#    if len(used_matches) < min_match:
+#        score = 0.0
+#    else:     
+    # Normalize score:
+    score = score/max(np.sum(spec1[:,1]**2), np.sum(spec2[:,1]**2))
     
-    return score
+    return score, used_matches
 
 """
 From Simon Rogers
 molnet
 """
-def fast_cosine_shift(spectrum1, spectrum2, tol, min_match, min_intens = 0):
+def fast_cosine_shift(spectrum1, spectrum2, tol, min_intens = 0):
     if len(spectrum1.peaks) == 0 or len(spectrum2.peaks) == 0:
         return 0.0,[]
 
@@ -1195,13 +1195,13 @@ def fast_cosine_shift(spectrum1, spectrum2, tol, min_match, min_intens = 0):
             used2.add(m[1])
             used_matches.append(m)
     
-    if len(used_matches) < min_match:
-        score = 0.0
-    else:     
-        # Normalize score:
-        score = score/max(np.sum(spec1[:,1]**2), np.sum(spec2[:,1]**2))
+#    if len(used_matches) < min_match:
+#        score = 0.0
+#    else:     
+    # Normalize score:
+    score = score/max(np.sum(spec1[:,1]**2), np.sum(spec2[:,1]**2))
     
-    return score #, used_matches
+    return score, used_matches
 
 
 def fast_cosine_shift2(spectrum1, spectrum2, tol, max_mz):
@@ -1243,7 +1243,11 @@ def fast_cosine_shift2(spectrum1, spectrum2, tol, max_mz):
     return score
 
     
-def fast_cosine_shift_hungarian(spectrum1, spectrum2, tol, min_match, min_intens=0):
+def fast_cosine_shift_hungarian(spectrum1, 
+                                spectrum2, 
+                                tol, 
+#                                min_match, 
+                                min_intens=0):
     """ Taking full care of weighted bipartite matching problem:
         Use Hungarian algorithm (slow...)
     """
@@ -1427,8 +1431,10 @@ def cosine_matrix(spectra,
 
 def molnet_matrix(spectra, 
                   tol, 
-                  max_mz, min_mz = 0, 
-                  min_match = 2, min_intens = 0.01,
+                  max_mz, 
+                  min_mz = 0, 
+#                  min_match = 2, 
+                  min_intens = 0.01,
                   filename = None,
                   method='fast',
                   num_workers = 4,
@@ -1445,8 +1451,8 @@ def molnet_matrix(spectra,
         Maxium m-z mass to take into account
     min_mz: float 
         Minimum m-z mass to take into account
-    min_match: int
-        Minimum numbe of peaks that need to be matches. Otherwise score will be set to 0
+#    min_match: int
+#        Minimum numbe of peaks that need to be matches. Otherwise score will be set to 0
     min_intens: float
         Sets the minimum relative intensity peaks must have to be looked at for potential matches.
     filename: str/ None
@@ -1498,6 +1504,7 @@ def molnet_matrix(spectra,
     if collect_new_data == True:  
         if counter_init == 0:
             molnet_sim = np.zeros((len(spectra), len(spectra)))
+            molnet_matches = np.zeros((len(spectra), len(spectra)))
 
         counter = counter_init
         safety_save = int(((len(spectra)**2)/2)/safety_points)  # Save molnet-matrix along process
@@ -1505,7 +1512,7 @@ def molnet_matrix(spectra,
         for i in missing_scores: #range(n_start, len(spectra)):
             parameter_collection = []    
             for j in range(i,len(spectra)):
-                parameter_collection.append([spectra[i], spectra[j], i, j, tol, min_match, min_intens, method, counter])
+                parameter_collection.append([spectra[i], spectra[j], i, j, tol, min_intens, method, counter])
                 counter += 1
 
             # Create a pool of processes. For instance one for each CPU in your machine.
@@ -1515,20 +1522,23 @@ def molnet_matrix(spectra,
                 molnet_pairs.append(futures)
              
             for m, future in enumerate(molnet_pairs[0]):
-                spec_i, spec_j, ind_i, ind_j, _, _, _, _, counting = parameter_collection[m]
-                molnet_sim[ind_i,ind_j] = future.result()
-                if (counting+1) % safety_save == 0:
-                    np.save(filename[:-4]+ str(i), molnet_sim)
+                spec_i, spec_j, ind_i, ind_j, _, _, _, counting = parameter_collection[m]
+                molnet_sim[ind_i,ind_j] = future.result()[0]
+                molnet_matches[ind_i,ind_j] = future.result()[1]
+                if filename is not None:
+                    if (counting+1) % safety_save == 0:
+                        np.save(filename[:-4]+ str(i), molnet_sim)
 
         # Symmetric matrix --> fill        
         for i in range(1,len(spectra)):
             for j in range(i):  
-                molnet_sim[i,j] = molnet_sim[j,i]      
+                molnet_sim[i,j] = molnet_sim[j,i]    
+                molnet_matches[i,j] = molnet_matches[j,i] 
     
         if filename is not None:
             np.save(filename, molnet_sim)
             
-    return molnet_sim
+    return molnet_sim, molnet_matches
 
 
 def cosine_pair(X, len_spectra):
@@ -1547,18 +1557,19 @@ def cosine_pair(X, len_spectra):
 def molnet_pair(X, len_spectra):
     """ Single molnet pair calculation
     """ 
-    spectra_i, spectra_j, i, j, tol, min_match, min_intens, method, counter = X
+    spectra_i, spectra_j, i, j, tol, min_intens, method, counter = X
     if method == 'fast':
-        molnet_pair = fast_cosine_shift(spectra_i, spectra_j, tol, min_match, min_intens = min_intens)
+        molnet_pair, used_matches = fast_cosine_shift(spectra_i, spectra_j, tol, min_intens = min_intens)
     elif method == 'hungarian':
-        molnet_pair = fast_cosine_shift_hungarian(spectra_i, spectra_j, tol, min_match, min_intens = min_intens)
+        molnet_pair = fast_cosine_shift_hungarian(spectra_i, spectra_j, tol, 0, min_intens = min_intens)
+        used_matches = [] # TODO find way to get match number
     else:
         print("Given method does not exist...")
 
     if (counter+1) % 1000 == 0 or counter == len_spectra-1:  
         print('\r', ' Calculated MolNet for pair ', i, '--', j, '. ( ', np.round(200*(counter+1)/len_spectra**2, 2), ' % done).', end="")
 
-    return molnet_pair
+    return molnet_pair, len(used_matches)
 
 
 def tanimoto_matrix(spectra, 
@@ -2018,8 +2029,8 @@ def plot_spectra_comparison(MS_measure,
             smiles.append(spectra[candidate_id].metadata["smiles"])
             mol = Chem.MolFromSmiles(smiles[i])
             Draw.MolToMPL(mol, size=size, kekulize=True, wedgeBonds=True, imageType=None, fitImage=True)
-#            plt.xlim((0, 2.5))
-#            plt.ylim((0, 2.5))
+            plt.xlim((0, 2.5))
+            plt.ylim((0, 2.5))
     
     return Csim_words
 
