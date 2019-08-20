@@ -1876,13 +1876,15 @@ def plot_spectra_comparison(MS_measure,
                             min_mz = 5, 
                             max_mz = 500,
                             threshold = 0.01,
+                            tol = 0.5,
+                            method = 'cosine', #'molnet'
                             wordsim_cutoff = 0.5,
                             plot_molecules = False):
     """
 
     """
     from scipy import spatial
-    import matplotlib
+    #import matplotlib
     plot_colors = ['darkcyan', 'purple']#['seagreen', 'steelblue']#['darkcyan', 'firebrick']
     
     
@@ -1915,7 +1917,7 @@ def plot_spectra_comparison(MS_measure,
                                                                  num_decimals = num_decimals, 
                                                                  peak_loss_words = ['peak_', 'loss_'],
                                                                  min_loss = 0, 
-                                                                 max_loss = 1000.00,
+                                                                 max_loss = max_mz,
                                                                  ignore_losses = True)
     
     # Remove words/peaks that are not in dictionary
@@ -1933,7 +1935,8 @@ def plot_spectra_comparison(MS_measure,
     
 
     # Plot spectra
-    fig = plt.figure(figsize=(12, 12))
+    # -------------------------------------------------------------------------
+    plt.figure(figsize=(12, 12))
     
     ax_wordsim = plt.axes(rect_wordsim)
     ax_wordsim.tick_params(direction='in', top=True, right=True)
@@ -1944,6 +1947,7 @@ def plot_spectra_comparison(MS_measure,
 #    ax_cbar= fig.add_axes(rect_cbar)
     
     # Word similarity plot:
+    # -------------------------------------------------------------------------
     data_x = []
     data_y = []
     data_z = []
@@ -1956,13 +1960,35 @@ def plot_spectra_comparison(MS_measure,
 
     cm = plt.cm.get_cmap('PuRd') #PuRdYlGn('RdYlBu')
     
-    ax_wordsim.scatter(data_x, data_y, s = 500*np.array(data_z)**2, c= data_z, cmap=cm, alpha=0.4) #s = 10000*np.array(data_z)**2
-#    ax_wordsim = plt.xlabel('m/z spectrum 2')
-#    plt.ylabel('m/z spectrum 1')  
+    ax_wordsim.scatter(data_x, data_y, s = 500*np.array(data_z)**2, c= data_z, cmap=cm, alpha=0.4) #s = 10000*np.array(data_z)**2 
 
-    zero_pairs = find_pairs(peaks1, peaks2, tol= 0.2, shift=0.0)
-    zero_pairs = sorted(zero_pairs, key = lambda x: x[2], reverse = True)
-    idx1, idx2, _ = zip(*zero_pairs)
+    zero_pairs = find_pairs(peaks1, peaks2, tol=tol, shift=0.0)
+    
+    if method == 'cosine':
+        matching_pairs = zero_pairs
+    elif method == 'molnet':
+        shift = spectra[ID1].parent_mz - spectra[ID2].parent_mz
+        nonzero_pairs = find_pairs(peaks1, peaks2, tol=tol, shift=shift)
+        matching_pairs = zero_pairs + nonzero_pairs
+    else:
+        print("Given method inkown.")
+        
+    matching_pairs = sorted(matching_pairs,key = lambda x: x[2], reverse = True)
+    used1 = set()
+    used2 = set()
+    score = 0.0
+    used_matches = []
+    for m in matching_pairs:
+        if not m[0] in used1 and not m[1] in used2:
+            score += m[2]
+            used1.add(m[0])
+            used2.add(m[1])
+            used_matches.append(m)
+       
+#    zero_pairs = find_pairs(peaks1, peaks2, tol=tol, shift=0.0)
+#    zero_pairs = sorted(zero_pairs, key = lambda x: x[2], reverse = True)
+#    idx1, idx2, _ = zip(*zero_pairs)
+    idx1, idx2, _ = zip(*used_matches)
     cosine_x = []
     cosine_y = []
     for i in range(len(idx1)):
@@ -1980,17 +2006,11 @@ def plot_spectra_comparison(MS_measure,
     ax_specy.plot([0, 0], [peaks2[:,0].min(), peaks2[:,0].max()], '--')  # Middle bar
 #    plt.title('Spectrum 2')
 
-#    # Optionally add a colorbar
-#    max_color = np.max(data_z)
-#    min_color = np.min(data_z)
-#    color_ticks = np.round(np.linspace(min_color, max_color, 6),2)
-#    cax, _ = matplotlib.colorbar.make_axes(ax_cbar)
-#    cbar = matplotlib.colorbar.ColorbarBase(cax, orientation="horizontal", cmap=cm, ticks=[0, 0.2, 0.4, 0.6, 0.8, 1])
-#    cbar.ax.set_yticklabels([x for x in list(color_ticks)])
-    
+   
     plt.show()
     
     # Plot molecules
+    # -------------------------------------------------------------------------
     if plot_molecules:
         size = (200, 200)
         smiles = []  
