@@ -1337,8 +1337,10 @@ def cosine_matrix_fast(spectra,
 
 def cosine_matrix(spectra, 
                   tol, 
-                  max_mz, min_mz = 0, 
-                  min_match = 2, min_intens = 0.01,
+                  max_mz, 
+                  min_mz = 0, 
+#                  min_match = 2, 
+                  min_intens = 0.01,
                   filename = None,
                   num_workers = 4):
     """ Create Matrix of all cosine similarities.
@@ -1351,8 +1353,8 @@ def cosine_matrix(spectra,
         Maxium m-z mass to take into account
     min_mz: float 
         Minimum m-z mass to take into account
-    min_match: int
-        Minimum numbe of peaks that need to be matches. Otherwise score will be set to 0
+#    min_match: int
+#        Minimum numbe of peaks that need to be matches. Otherwise score will be set to 0
     min_intens: float
         Sets the minimum relative intensity peaks must have to be looked at for potential matches.
     filename: str/ None
@@ -1372,13 +1374,11 @@ def cosine_matrix(spectra,
                 print("Missing cosine scores will be calculated.")
                 counter_total = int((len(spectra)**2)/2)
                 counter_init = counter_total - np.sum(len(spectra) - missing_scores)
-#                n_start = max(0, np.where(diagonal == 0)[0][0] -1 )
-#                counter_init = (n_start-1) * len(spectra) - ((n_start-1)**2 - (n_start-1))/2
+
                 print("About ", 100*(counter_init/counter_total),"% of the values already completed.")
                 collect_new_data = True
             else:    
                 print("Complete cosine similarity scores found and loaded.")
-#                n_start = 0
                 missing_scores = []
                 counter_init = 0
                 collect_new_data = False
@@ -1387,7 +1387,6 @@ def cosine_matrix(spectra,
             print("Could not find file ", filename) 
             print("Cosine scores will be calculated from scratch.")
             collect_new_data = True
-#            n_start = 0
             missing_scores = np.arange(0,len(spectra))
             counter_init = 0
     else:
@@ -1399,13 +1398,14 @@ def cosine_matrix(spectra,
     if collect_new_data == True:  
         if counter_init == 0:
             cosine_sim = np.zeros((len(spectra), len(spectra)))
+            cosine_matches = np.zeros((len(spectra), len(spectra)))
 
         counter = counter_init
         print("Calculate pairwise cosine scores by ", num_workers, "number of workers.")
         for i in missing_scores: #range(n_start, len(spectra)):
             parameter_collection = []    
             for j in range(i,len(spectra)):
-                parameter_collection.append([spectra[i], spectra[j], i, j, tol, min_match, min_intens, counter])
+                parameter_collection.append([spectra[i], spectra[j], i, j, tol, min_intens, counter])
                 counter += 1
 
             # Create a pool of processes. For instance one for each CPU in your machine.
@@ -1416,17 +1416,20 @@ def cosine_matrix(spectra,
              
             for m, future in enumerate(cosine_pairs[0]):
                 spec_i, spec_j, ind_i, ind_j, _, _, _, counting = parameter_collection[m]
-                cosine_sim[ind_i,ind_j] = future.result()
+                cosine_sim[ind_i,ind_j] = future.result()[0]
+                cosine_matches[ind_i,ind_j] = future.result()[1]
 
         # Symmetric matrix --> fill        
         for i in range(1,len(spectra)):
             for j in range(i):  
                 cosine_sim[i,j] = cosine_sim[j,i]      
+                cosine_matches[i,j] = cosine_matches[j,i]
     
         if filename is not None:
             np.save(filename, cosine_sim)
+            np.save(filename[:-4]+ "_matches.npy", cosine_matches)
             
-    return cosine_sim
+    return cosine_sim, cosine_matches
 
 
 def molnet_matrix(spectra, 
@@ -1546,14 +1549,14 @@ def molnet_matrix(spectra,
 def cosine_pair(X, len_spectra):
     """ Single molnet pair calculation
     """ 
-    spectra_i, spectra_j, i, j, tol, min_match, min_intens, counter = X
-    cosine_pair = cosine_score(spectra_i, spectra_j, tol, min_match, min_intens = min_intens)
+    spectra_i, spectra_j, i, j, tol, min_intens, counter = X
+    cosine_pair, used_matches = cosine_score(spectra_i, spectra_j, tol, min_intens = min_intens)
 
 
     if (counter+1) % 1000 == 0 or counter == len_spectra-1:  
         print('\r', ' Calculated cosine for pair ', i, '--', j, '. ( ', np.round(200*(counter+1)/len_spectra**2, 2), ' % done).', end="")
 
-    return cosine_pair
+    return cosine_pair, len(used_matches)
 
 
 def molnet_pair(X, len_spectra):
