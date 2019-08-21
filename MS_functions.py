@@ -1538,6 +1538,7 @@ def molnet_matrix(spectra,
     
         if filename is not None:
             np.save(filename, molnet_sim)
+            np.save(filename[:-4]+ "_matches.npy", molnet_matches)
             
     return molnet_sim, molnet_matches
 
