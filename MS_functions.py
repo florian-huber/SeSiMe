@@ -1366,6 +1366,7 @@ def cosine_matrix(spectra,
     if filename is not None:
         try: 
             cosine_sim = np.load(filename)
+            cosine_matches = np.load(filename[:-4]+ "_matches.npy")
             # Check if matrix was calculated to the end:
             diagonal = cosine_sim.diagonal()
             if np.min(diagonal) == 0:
@@ -1415,7 +1416,7 @@ def cosine_matrix(spectra,
                 cosine_pairs.append(futures)
              
             for m, future in enumerate(cosine_pairs[0]):
-                spec_i, spec_j, ind_i, ind_j, _, _, _, counting = parameter_collection[m]
+                spec_i, spec_j, ind_i, ind_j, _, _, counting = parameter_collection[m]
                 cosine_sim[ind_i,ind_j] = future.result()[0]
                 cosine_matches[ind_i,ind_j] = future.result()[1]
 
@@ -1473,6 +1474,7 @@ def molnet_matrix(spectra,
     if filename is not None:
         try: 
             molnet_sim = np.load(filename)
+            molnet_matches = np.load(filename[:-4]+ "_matches.npy")
             # Check if matrix was calculated to the end:
             diagonal = molnet_sim.diagonal()
             if np.min(diagonal) == 0:
