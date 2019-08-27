@@ -638,7 +638,7 @@ def create_MS_documents(spectra,
     """
     MS_documents = []
     MS_documents_intensity = []
-    spectra_metadata = pd.DataFrame(columns=['doc_ID', 'spectrum_ID', 'sub_ID', 'parent_mz', 'parent_intensity', 'no_peaks_losses'])
+    spectra_metadata = pd.DataFrame(columns=['doc_ID', 'spectrum_ID', 'sub_ID', 'precursor_mz', 'parent_intensity', 'no_peaks_losses'])
     
     for spec_id, spectrum in enumerate(spectra):
         doc = []
@@ -672,7 +672,7 @@ def create_MS_documents(spectra,
 
         MS_documents.append(doc)
         MS_documents_intensity.append(doc_intensity)
-        spectra_metadata.loc[spec_id] = [spec_id, int(spectrum.id), 0, spectrum.parent_mz, 1, len(doc)]
+        spectra_metadata.loc[spec_id] = [spec_id, int(spectrum.id), 0, spectrum.precursor_mz, 1, len(doc)]
          
     return MS_documents, MS_documents_intensity, spectra_metadata
 
