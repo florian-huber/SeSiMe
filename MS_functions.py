@@ -238,7 +238,8 @@ def dict_to_spectrum(spectra_dict):
                             max_loss = value["max_loss"],
                             min_intensity_perc = 0,
                             exp_intensity_filter = value["exp_intensity_filter"],
-                            min_peaks = value["min_peaks"])
+                            min_peaks = value["min_peaks"],
+                            max_peaks = value["max_peaks"])
         
         for key2, value2 in value.items():
             setattr(spectrum, key2, value2)
@@ -362,6 +363,7 @@ def load_MS_data(path_data, path_json,
                  min_intensity_perc = 0.0,
                  exp_intensity_filter = 0.01,
                  min_peaks = 10,
+                 max_peaks = None,
                  peaks_per_mz = 15/200,
                  merge_energies = True,
                  merge_ppm = 10,
@@ -423,6 +425,7 @@ def load_MS_data(path_data, path_json,
                         min_intensity_perc = min_intensity_perc,
                         exp_intensity_filter = None,
                         min_peaks = min_peaks,
+                        max_peaks = max_peaks,
                         merge_energies = merge_energies,
                         merge_ppm = merge_ppm,
                         replace = replace)
@@ -445,6 +448,7 @@ def load_MS_data(path_data, path_json,
                                 min_intensity_perc = min_intensity_perc,
                                 exp_intensity_filter = exp_intensity_filter,
                                 min_peaks = min_peaks_scaled,
+                                max_peaks = max_peaks,
                                 merge_energies = merge_energies,
                                 merge_ppm = merge_ppm,
                                 replace = replace)
@@ -502,6 +506,7 @@ def load_MGF_data(path_json,
                  min_intensity_perc = 0.0,
                  exp_intensity_filter = 0.01,
                  min_peaks = 10,
+                 max_peaks = None,
                  peaks_per_mz = 20/200,
                  peak_loss_words = ['peak_', 'loss_'],
                  sub_spectra = False):        
@@ -568,7 +573,8 @@ def load_MGF_data(path_json,
                                 max_loss = max_loss,
                                 min_intensity_perc = min_intensity_perc,
                                 exp_intensity_filter = exp_intensity_filter,
-                                min_peaks = min_peaks_scaled)
+                                min_peaks = min_peaks_scaled,
+                                max_peaks = max_peaks)
             
             id = spec.spectrum_id
             spectrum.read_spectrum_mgf(spec, id)
