@@ -71,6 +71,7 @@ class Spectrum(object):
                  min_intensity_perc = 0.0,
                  exp_intensity_filter = 0.01,
                  min_peaks = 10,
+                 max_peaks = None,
                  merge_energies = True,
                  merge_ppm = 10,
                  replace = 'max'):
@@ -95,6 +96,7 @@ class Spectrum(object):
         else:
             self.exp_intensity_filter = exp_intensity_filter
         self.min_peaks = min_peaks
+        self.max_peaks = max_peaks
         self.merge_energies = merge_energies
         self.merge_ppm = merge_ppm
         self.replace = replace
@@ -152,10 +154,9 @@ class Spectrum(object):
                             temp_intensity.append(intensity)
         
         peaks = list(zip(temp_mass, temp_intensity))
-#        peaks = self.process_peaks(peaks)
         peaks = process_peaks(peaks, self.min_frag, self.max_frag,
                               self.min_intensity_perc, self.exp_intensity_filter,
-                              self.min_peaks)
+                              self.min_peaks, self.max_peaks)
         
         self.peaks = peaks
         self.n_peaks = len(peaks)
@@ -199,7 +200,7 @@ class Spectrum(object):
         peaks = spectrum_mgf.peaks
         peaks = process_peaks(peaks, self.min_frag, self.max_frag,
                               self.min_intensity_perc, self.exp_intensity_filter,
-                              self.min_peaks)
+                              self.min_peaks, self.max_peaks)
         
         self.peaks = peaks
         self.n_peaks = len(peaks)
@@ -253,7 +254,8 @@ def dict_to_spectrum(spectra_dict):
 def process_peaks(peaks, min_frag, max_frag, 
                   min_intensity_perc,
                   exp_intensity_filter,
-                  min_peaks):
+                  min_peaks,
+                  max_peaks = None):
     """ Process peaks
     
     Remove peaks outside window min_frag <-> max_frag.
@@ -277,6 +279,8 @@ def process_peaks(peaks, min_frag, max_frag,
         to exp_intensity_filter (Default = 0.01).
     min_peaks: int
         Minimum number of peaks to keep, unless less are present from the start (Default = 10).
+    max_peaks: int
+        Maximum number of peaks to keep. Set to 'None' to ignore  (Default = 'None').    
    
     """
     def exponential_func(x, a, b):
@@ -326,13 +330,23 @@ def process_peaks(peaks, min_frag, max_frag,
         else:
             peaks = peaks[keep_idx, :]
         
-        # Sort by peak m/z
-        peaks = peaks[np.lexsort((peaks[:,1], peaks[:,0])),:]
-        return [(x[0], x[1]) for x in peaks] # TODO: now array is transfered back to list (to be able to store as json later). Seems weird.
+
+#        peaks = peaks[np.lexsort((peaks[:,1], peaks[:,0])),:]           
+        # Sort by peak intensity
+        peaks = peaks[np.lexsort((peaks[:,0], peaks[:,1])),:]
+        if max_peaks is not None:
+            return [(x[0], x[1]) for x in peaks[-max_peaks:,:]] # TODO: now array is transfered back to list (to be able to store as json later). Seems weird.
+
+        else:
+            return [(x[0], x[1]) for x in peaks]   
     else:
-        # Sort by peak m/z
-        peaks = peaks[np.lexsort((peaks[:,1], peaks[:,0])),:]
-        return [(x[0], x[1]) for x in peaks]
+        # Sort by peak intensity
+#        peaks = peaks[np.lexsort((peaks[:,1], peaks[:,0])),:]
+        peaks = peaks[np.lexsort((peaks[:,0], peaks[:,1])),:]
+        if max_peaks is not None:
+            return [(x[0], x[1]) for x in peaks[-max_peaks:,:]]
+        else:
+            return [(x[0], x[1]) for x in peaks]
 
 
 ## ----------------------------------------------------------------------------
