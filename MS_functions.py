@@ -231,6 +231,9 @@ def dict_to_spectrum(spectra_dict):
     keys = []
     for key, value in spectra_dict.items():
         keys.append(key) 
+        
+        if "max_peaks" not in value:
+            value["max_peaks"] = None
             
         spectrum = Spectrum(min_frag = value["min_frag"], 
                             max_frag = value["max_frag"],
