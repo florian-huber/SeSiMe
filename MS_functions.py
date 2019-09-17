@@ -597,7 +597,15 @@ def load_MGF_data(path_json,
         spectra = [copy.deepcopy(x) for x in spectra if len(x.peaks)>=min_peaks_absolute]
         print("Take ", len(spectra), "spectra out of ", num_spectra_initial, ".")
 
-
+        # Check spectrum IDs
+        ids = []
+        for spec in spectra:
+            ids.append(spec.id)
+        if len(list(set(ids))) < len(spectra):
+            print("Non-unique spectrum IDs found. Resetting all IDs.")
+            for i, spec in enumerate(spectra):
+                spectra[i].id = i
+        
         # Collect dictionary
         for spec in spectra:
             id = spec.id
