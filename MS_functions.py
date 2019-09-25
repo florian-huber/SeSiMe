@@ -931,7 +931,7 @@ def get_mol_fingerprints(spectra_dict, method = "daylight"):
     exclude_IDs = []
     molecules = []
     for key, value in spectra_dict.items():
-        if "inchikey" in value["metadata"]:
+        if "inchi" in value["metadata"]:
             keys.append(key) 
             #smiles.append(value["smiles"])
             #inchikeys.append(value["metadata"]["inchikey"])
@@ -954,7 +954,7 @@ def get_mol_fingerprints(spectra_dict, method = "daylight"):
     fingerprints = []
     for i in range(len(molecules)):
         if molecules[i] is None:
-            print("Problem with molecule " + spectra_dict[keys[i]]["id"])
+            print("Problem with molecule " + str(spectra_dict[keys[i]]["id"]))
 #            molecules[i] = Chem.inchi.MolFromInchi(inchikeys[i])
 #            if molecules[i] is None:
 #                print("Could not be solved by using the InChikey.")
