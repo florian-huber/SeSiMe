@@ -921,37 +921,45 @@ def get_mol_fingerprints(spectra_dict, method = "daylight"):
     spectra_dict: dict
         Dictionary containing all spectrum objects information (peaks, losses, metadata...).
     method: str
-        
+        Determine method for deriving molecular fingerprints. Supported choices are 'daylight', 
+        'morgan1', 'morgan2', 'morgan3'.
     """
     # If spectra is given as a dictionary
     keys = []
-    smiles = []
-    inchikeys = []
+    #smiles = []
+    #inchikeys = []
     exclude_IDs = []
+    molecules = []
     for key, value in spectra_dict.items():
-        if "smiles" in value and "inchikey" in value["metadata"]:
+        if "inchikey" in value["metadata"]:
             keys.append(key) 
-            smiles.append(value["smiles"])
-            inchikeys.append(value["metadata"]["inchikey"])
+            #smiles.append(value["smiles"])
+            #inchikeys.append(value["metadata"]["inchikey"])
+            molecules.append(Chem.MolFromInchi(value["metadata"]["inchi"], 
+                                               sanitize=True, 
+                                               removeHs=True, 
+                                               logLevel=None, 
+                                               treatWarningAsError=False))
         elif "smiles" in value:  # Smiles but no InChikey
             keys.append(key) 
-            smiles.append(value["smiles"])
-            inchikeys.append('')
+            #smiles.append(value["smiles"])
+            #inchikeys.append('')
+            molecules.append(Chem.MolFromSmiles(value["smiles"]))
         else:
             print("No smiles found for spectra ", key, ".")
-            smiles.append("H20")  # just have some water when you get stuck
+            #smiles.append("H20")  # just have some water when you get stuck
+            molecules.append(Chem.MolFromSmiles("H20")) # just have some water when you get stuck
             exclude_IDs.append(int(value["id"]))
-   
-    molecules = [Chem.MolFromSmiles(x) for x in smiles]
+        
     fingerprints = []
     for i in range(len(molecules)):
         if molecules[i] is None:
             print("Problem with molecule " + spectra_dict[keys[i]]["id"])
-            molecules[i] = Chem.inchi.MolFromInchi(inchikeys[i])
-            if molecules[i] is None:
-                print("Could not be solved by using the InChikey.")
-            else:
-                print("Using InChikey instead of smiles.")
+#            molecules[i] = Chem.inchi.MolFromInchi(inchikeys[i])
+#            if molecules[i] is None:
+#                print("Could not be solved by using the InChikey.")
+#            else:
+#                print("Using InChikey instead of smiles.")
             fp = 0
             exclude_IDs.append(int(spectra_dict[keys[i]]["id"]))
         else:
@@ -1614,7 +1622,7 @@ def molnet_pair(X, len_spectra):
     return molnet_pair, len(used_matches)
 
 
-def tanimoto_matrix(spectra, 
+def mol_sim_matrix_symmetric(spectra, 
                   fingerprints,
                   filename = None):
     """ Create Matrix of all molecular similarities (based on annotated SMILES).
@@ -1664,6 +1672,55 @@ def tanimoto_matrix(spectra,
             np.save(filename, molecular_similarities)
 
     return molecular_similarities
+
+
+def mol_sim_matrix(fingerprints1,
+                  fingerprints2,
+                  filename = None):
+    """ Create Matrix of all molecular similarities (based on annotated SMILES or INCHI).
+    Takes some time to calculate, so better only do it once and save as npy.
+    Here: comparing two different sets of molecular fingerprints!
+    """  
+    
+    if filename is not None:
+        try: 
+            molecular_similarities = np.load(filename)
+            print("Molecular similarity scores found and loaded.")
+            collect_new_data = False
+                
+        except FileNotFoundError: 
+            print("Could not find file ", filename) 
+            print("Molecular scores will be calculated from scratch.")
+            collect_new_data = True
+    
+    if collect_new_data == True:      
+        
+        # Check type of fingerprints given as input:
+        try: 
+            DataStructs.FingerprintSimilarity(fingerprints1[0], fingerprints2[0])
+            fingerprint_type = "daylight" # at least assumed here
+        
+        except AttributeError:
+            fingerprint_type = "morgan" # at least assumed here
+        
+        molecular_similarities = np.zeros((len(fingerprints1), len(fingerprints2)))
+        for i in range(len(fingerprints1)):
+            # Show progress
+            if (i+1) % 10 == 0 or i == len(fingerprints1)-1:  
+                print('\r', ' Molecular similarity for spectrum ', i+1, ' of ', len(fingerprints1), ' fingerprints-1.', end="")
+            if fingerprints1[i] != 0:
+                for j in range(len(fingerprints2)):
+                    if fingerprints2[j] != 0: 
+                        if fingerprint_type == "daylight":
+                            molecular_similarities[i,j] = DataStructs.FingerprintSimilarity(fingerprints1[i], fingerprints2[j])
+                        elif fingerprint_type == "morgan":
+                            molecular_similarities[i,j] = DataStructs.DiceSimilarity(fingerprints1[i], fingerprints2[j])      
+    
+        if filename is not None:
+            np.save(filename, molecular_similarities)
+
+    return molecular_similarities
+
 
 
 def one_hot_spectrum(spec, 
