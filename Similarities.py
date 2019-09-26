@@ -466,7 +466,7 @@ class SimilarityMeasures():
             'ignore': will ignore all 'words' not present in the pre-trained model.
             TODO 'substitute": will look to replace missing words with closest matches?
         extra_weights: list
-            List of extra weights for add documents (and every word). Set to "None" if not used.
+            List of extra weights for add documents (and every word). Set to "False" if not used.
         tfidf_weighted: bool
             True, False
         weight_method: str
@@ -517,7 +517,7 @@ class SimilarityMeasures():
         else:
             print("All 'words' of the given documents were found in the trained word2vec model.")
         
-        if tfidf_model is not None:
+        if tfidf_model is True:
             self.tfidf = models.TfidfModel.load(tfidf_model)
             print("Tfidf model found and loaded.")
         else:
