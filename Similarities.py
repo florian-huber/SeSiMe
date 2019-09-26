@@ -517,15 +517,16 @@ class SimilarityMeasures():
         else:
             print("All 'words' of the given documents were found in the trained word2vec model.")
         
-        if tfidf_model is True:
-            self.tfidf = models.TfidfModel.load(tfidf_model)
-            print("Tfidf model found and loaded.")
-        else:
-            if self.tfidf is None:
-                self.tfidf = models.TfidfModel(self.bow_corpus)
-                print("No tfidf model found.")
+        if tfidf_weighted is True:
+            if tfidf_model is not None:
+                self.tfidf = models.TfidfModel.load(tfidf_model)
+                print("Tfidf model found and loaded.")
             else:
-                print("Using present tfidf model.")
+                if self.tfidf is None:
+                    self.tfidf = models.TfidfModel(self.bow_corpus)
+                    print("No tfidf model found.")
+                else:
+                    print("Using present tfidf model.")
             
             
         vector_size = self.model_word2vec.wv.vector_size
