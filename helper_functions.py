@@ -23,19 +23,19 @@ def preprocess_document(corpus, stopwords, min_frequency = 2):
     - Set words to lower case.
     """
 
-    texts = [[word.lower() for word in document if word not in stopwords] for document in corpus]
+    corpus_lowered = [[word.lower() for word in document if word not in stopwords] for document in corpus]
 
     # remove words that appear only once
     from collections import defaultdict
     
     frequency = defaultdict(int)
-    for text in texts:
-        for token in list(set(text)):
+    for document in corpus_lowered:
+        for token in list(set(document)):
             frequency[token] += 1
     
-    texts = [[token for token in text if frequency[token] >= min_frequency] for text in texts]
+    corpus_lowered = [[token for token in document if frequency[token] >= min_frequency] for document in corpus_lowered]
     
-    return texts, frequency
+    return corpus_lowered, frequency
 
 
 
