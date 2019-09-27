@@ -295,13 +295,17 @@ def process_peaks(peaks, min_frag, max_frag,
         if peaks.shape[1] != 2:
             print("Peaks were given in unexpected format...")
     
-    intensity_thres = np.max(peaks[:,1]) * min_intensity_perc/100
-    keep_idx = np.where((peaks[:,0] > min_frag) & (peaks[:,0] < max_frag) & (peaks[:,1] > intensity_thres))[0]
-    if (len(keep_idx) < min_peaks):
-        # If not enough peaks selected, try again without intensity threshold
-        keep_idx2 = np.where((peaks[:,0] > min_frag) & (peaks[:,0] < max_frag))[0]
-        peaks = peaks[keep_idx2,:]
-    else:
+    if min_intensity_perc > 0:
+        intensity_thres = np.max(peaks[:,1]) * min_intensity_perc/100
+        keep_idx = np.where((peaks[:,0] > min_frag) & (peaks[:,0] < max_frag) & (peaks[:,1] > intensity_thres))[0]
+        if (len(keep_idx) < min_peaks):
+            # If not enough peaks selected, try again without intensity threshold
+            keep_idx2 = np.where((peaks[:,0] > min_frag) & (peaks[:,0] < max_frag))[0]
+            peaks = peaks[keep_idx2,:]
+        else:
+            peaks = peaks[keep_idx,:]
+    else: 
+        keep_idx = np.where((peaks[:,0] > min_frag) & (peaks[:,0] < max_frag))[0]
         peaks = peaks[keep_idx,:]
 
     if (exp_intensity_filter is not None) and len(peaks) > 2*min_peaks:
