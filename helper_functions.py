@@ -30,10 +30,10 @@ def preprocess_document(corpus, stopwords, min_frequency = 2):
     
     frequency = defaultdict(int)
     for document in corpus_lowered:
-        for token in list(set(document)):
-            frequency[token] += 1
+        for word in list(set(document)):
+            frequency[word] += 1
     
-    corpus_lowered = [[token for token in document if frequency[token] >= min_frequency] for document in corpus_lowered]
+    corpus_lowered = [[word for word in document if frequency[word] >= min_frequency] for document in corpus_lowered]
     
     return corpus_lowered, frequency
 
