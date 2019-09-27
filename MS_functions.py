@@ -298,10 +298,9 @@ def process_peaks(peaks, min_frag, max_frag,
     intensity_thres = np.max(peaks[:,1]) * min_intensity_perc/100
     keep_idx = np.where((peaks[:,0] > min_frag) & (peaks[:,0] < max_frag) & (peaks[:,1] > intensity_thres))[0]
     if (len(keep_idx) < min_peaks):
-        # if not enough peaks selected, try again without intensity threshold
+        # If not enough peaks selected, try again without intensity threshold
         keep_idx2 = np.where((peaks[:,0] > min_frag) & (peaks[:,0] < max_frag))[0]
         peaks = peaks[keep_idx2,:]
-#        peaks = peaks[np.lexsort((peaks[:,0], peaks[:,1])),:][-min(min_peaks, len(peaks)):]  # former way --> problem: leads to peaks >max_frag
     else:
         peaks = peaks[keep_idx,:]
 
@@ -333,9 +332,7 @@ def process_peaks(peaks, min_frag, max_frag,
             peaks = peaks[np.lexsort((peaks[:,0], peaks[:,1])),:][-min_peaks:]
         else:
             peaks = peaks[keep_idx, :]
-        
-
-#        peaks = peaks[np.lexsort((peaks[:,1], peaks[:,0])),:]           
+                  
         # Sort by peak intensity
         peaks = peaks[np.lexsort((peaks[:,0], peaks[:,1])),:]
         if max_peaks is not None:
@@ -345,7 +342,6 @@ def process_peaks(peaks, min_frag, max_frag,
             return [(x[0], x[1]) for x in peaks]   
     else:
         # Sort by peak intensity
-#        peaks = peaks[np.lexsort((peaks[:,1], peaks[:,0])),:]
         peaks = peaks[np.lexsort((peaks[:,0], peaks[:,1])),:]
         if max_peaks is not None:
             return [(x[0], x[1]) for x in peaks[-max_peaks:,:]]
@@ -592,9 +588,9 @@ def load_MGF_data(path_json,
 
             
         # filter out spectra with few peaks
-        min_peaks_absolute =  min_peaks
+        min_peaks_absolute = min_peaks
         num_spectra_initial = len(spectra)
-        spectra = [copy.deepcopy(x) for x in spectra if len(x.peaks)>=min_peaks_absolute]
+        spectra = [copy.deepcopy(x) for x in spectra if len(x.peaks) >= min_peaks_absolute]
         print("Take ", len(spectra), "spectra out of ", num_spectra_initial, ".")
 
         # Check spectrum IDs
@@ -1922,7 +1918,6 @@ def get_spaced_colors_hex(n):
         "E00000", "00E000", "0000E0", "E0E000", "E000E0", "00E0E0", "E0E0E0"]
     
     RGB_colors = ["#"+x for x in spaced_colors[:n] ]
-    
 
     return RGB_colors
 
