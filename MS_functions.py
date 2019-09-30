@@ -17,6 +17,8 @@ from scipy.optimize import linear_sum_assignment
 import random
 import pandas as pd
 
+from pyteomics import mgf
+
 from rdkit import DataStructs
 from rdkit import Chem
 from rdkit.Chem import Draw
@@ -85,6 +87,8 @@ class Spectrum(object):
         self.family = None
         self.annotations = []
         self.smiles = []
+        self.inchi = []
+        self.PROTON_MASS = 1.00727645199076
         
         self.min_frag = min_frag 
         self.max_frag = max_frag
@@ -100,6 +104,54 @@ class Spectrum(object):
         self.merge_energies = merge_energies
         self.merge_ppm = merge_ppm
         self.replace = replace
+    
+    
+    def ion_masses(self, precursormass, int_charge):
+        """
+        Compute the parent masses. Single charge version is used for 
+        loss computation.
+        """
+        mul = abs(int_charge)
+        parent_mass = precursormass * mul
+        parent_mass -= int_charge * self.PROTON_MASS
+        single_charge_precursor_mass = precursormass*mul
+        if int_charge > 0:
+            single_charge_precursor_mass -= (int_charge-1) * self.PROTON_MASS
+        elif int_charge < 0:
+            single_charge_precursor_mass += (mul-1) * self.PROTON_MASS
+        else:
+            # charge = zero - leave them all the same
+            parent_mass = precursormass
+            single_charge_precursor_mass = precursormass
+        return parent_mass, single_charge_precursor_mass
+
+
+    def interpret_charge(self, charge):
+        """
+        Method to interpret the ever variable charge field in the different
+        formats. Should never fail now.
+        """
+        if not charge: # if it is none
+            return 1
+        try:
+            if not type(charge) == str:
+                charge = str(charge)
+
+            # Try removing any + signs
+            charge = charge.replace("+", "")
+
+            # Remove trailing minus signs
+            if charge.endswith('-'):
+                charge = charge[:-1]
+                if not charge.startswith('-'):
+                    charge = '-' + charge
+            # Turn into an int
+            int_charge = int(charge)
+            return int_charge
+        except:
+            int_charge = 1
+        return int_charge
+    
     
     def read_spectrum(self, path, file, id):
         """ Read .ms file and extract most relevant information
@@ -161,11 +213,57 @@ class Spectrum(object):
         self.peaks = peaks
         self.n_peaks = len(peaks)
 
+
     def read_spectrum_mgf(self, spectrum_mgf, id):
-        """ Translate to THIS spectrum object given that we have a metabolomics.py spectrum object
+        """ Translate pyteomics spectrum into metabolomics.py spectrum object
         """
         self.id = id
-#        self.filename = doc_name
+        self.metadata = spectrum_mgf['params']
+        if 'charge' in spectrum_mgf['params']:
+            self.metadata['charge'] = spectrum_mgf['params']['charge'][0]
+        else:
+            self.metadata['charge'] = 1
+        self.metadata['precursormass'] = spectrum_mgf['params']['pepmass'][0]
+        self.metadata['parentintensity'] = spectrum_mgf['params']['pepmass'][1]
+        
+        # Following corrects parentmass according to charge
+        # if charge is known. This should lead to better computation of neutral losses
+        single_charge_precursor_mass = self.metadata['precursormass']
+        precursor_mass = self.metadata['precursormass']
+        parent_mass = self.metadata['precursormass']
+
+        str_charge = self.metadata['charge']
+        int_charge = self.interpret_charge(str_charge)
+
+        parent_mass, single_charge_precursor_mass = self.ion_masses(precursor_mass, int_charge)
+
+        self.metadata['parentmass'] = parent_mass
+        self.metadata['singlechargeprecursormass'] = single_charge_precursor_mass
+        self.metadata['charge'] = int_charge
+        
+        # Get precursor mass (later used to calculate losses!)
+        self.precursor_mz = float(self.metadata['precursormass'])
+        self.parent_mz = float(self.metadata['parentmass'])
+        
+        if 'smiles' in self.metadata:
+            self.smiles = self.metadata['smiles']
+        if 'inchi' in self.metadata:
+            self.inchi = self.metadata['inchi']
+
+        peaks = list(zip(spectrum_mgf['m/z array'], spectrum_mgf['intensity array']))
+        if len(peaks) >= self.min_peaks:
+            peaks = process_peaks(peaks, self.min_frag, self.max_frag,
+                                  self.min_intensity_perc, self.exp_intensity_filter,
+                                  self.min_peaks, self.max_peaks)
+        
+        self.peaks = peaks
+        self.n_peaks = len(peaks)
+
+
+    def read_spectrum_mgf_old(self, spectrum_mgf, id):
+        """ Translate to metabolomics.py type spectrum object into MS_functions.py type spectrum object
+        """
+        self.id = id
         
         # Get precursor mass (later used to calculate losses!)
         if spectrum_mgf.precursor_mz is not None:
@@ -220,8 +318,7 @@ class Spectrum(object):
         
         # TODO: now array is tranfered back to list (to be able to store as json later). Seems weird.
         losses_list = [(x[0], x[1]) for x in losses[keep_idx,:]]
-        self.losses = losses_list
-        
+        self.losses = losses_list      
 
         
 def dict_to_spectrum(spectra_dict): 
@@ -334,7 +431,6 @@ def process_peaks(peaks, min_frag, max_frag,
         keep_idx = np.where(peaks[:,1] > threshold)[0]
         if len(keep_idx) < min_peaks:
             peaks = peaks[np.lexsort((peaks[:,0], peaks[:,1])),:][-min_peaks:]
-            print("Less than min_peaks above threshold. Keep min_peaks.")
         else:
             peaks = peaks[keep_idx, :]
                   
@@ -500,8 +596,131 @@ def load_MS_data(path_data, path_json,
     return spectra, spectra_dict, MS_documents, MS_documents_intensity, spectra_metadata
 
 
-
 def load_MGF_data(path_json,
+                  mgf_file, 
+                 results_file = None,
+                 num_decimals = 3,
+                 min_frag = 0.0, max_frag = 1000.0,
+                 min_loss = 10.0, max_loss = 200.0,
+                 min_intensity_perc = 0.0,
+                 exp_intensity_filter = 0.01,
+                 min_peaks = 10,
+                 max_peaks = None,
+                 peaks_per_mz = 20/200,
+                 peak_loss_words = ['peak_', 'loss_']):        
+    """ Collect spectra from MGF file
+    Based on pyteomics parser.
+    """
+    
+    spectra = []
+    spectra_dict = {}
+    MS_documents = []
+    MS_documents_intensity = []
+    collect_new_data = True
+        
+    if results_file is not None:
+        try: 
+            spectra_dict = functions.json_to_dict(path_json + results_file)
+            spectra_metadata = pd.read_csv(path_json + results_file[:-5] + "_metadata.csv")
+            print("Spectra json file found and loaded.")
+            spectra = dict_to_spectrum(spectra_dict)
+            collect_new_data = False
+            
+            with open(path_json + results_file[:-4] + "txt", "r") as f:
+                for line in f:
+                    line = line.replace('"', '').replace("'", "").replace("[", "").replace("]", "").replace("\n", "")
+                    MS_documents.append(line.split(", "))
+                    
+            with open(path_json + results_file[:-5] + "_intensity.txt", "r") as f:
+                for line in f:
+                    line = line.replace("[", "").replace("]", "")
+                    MS_documents_intensity.append([int(x) for x in line.split(", ")])
+                
+        except FileNotFoundError: 
+            print("Could not find file ", path_json,  results_file) 
+            print("Data will be imported from ", mgf_file)
+
+    # Read data from files if no pre-stored data is found:
+    if spectra_dict == {} or results_file is None:
+        
+        # Scale the min_peak filter
+        def min_peak_scaling(x, A, B):
+            return int(A + B * x)
+
+        with mgf.MGF(mgf_file) as reader:
+            for i, spec in enumerate(reader):
+        
+                # Make conform with spectrum class as defined in MS_functions.py
+                #--------------------------------------------------------------------
+
+                # Scale the min_peak filter
+                min_peaks_scaled = min_peak_scaling(spec['params']['pepmass'][0], min_peaks, peaks_per_mz)
+                
+                spectrum = Spectrum(min_frag = min_frag, 
+                                    max_frag = max_frag,
+                                    min_loss = min_loss, 
+                                    max_loss = max_loss,
+                                    min_intensity_perc = min_intensity_perc,
+                                    exp_intensity_filter = exp_intensity_filter,
+                                    min_peaks = min_peaks_scaled,
+                                    max_peaks = max_peaks)
+                
+                id = i #spec.spectrum_id
+                spectrum.read_spectrum_mgf(spec, id)
+                spectrum.get_losses
+    
+                # Calculate losses:
+                if len(spectrum.peaks) >= min_peaks: 
+                    spectrum.get_losses()
+                
+                # Collect in form of list of spectrum objects
+                spectra.append(spectrum)
+            
+        # Filter out spectra with few peaks
+        min_peaks_absolute = min_peaks
+        num_spectra_initial = len(spectra)
+        spectra = [copy.deepcopy(x) for x in spectra if len(x.peaks) >= min_peaks_absolute]
+        print("Take ", len(spectra), "spectra out of ", num_spectra_initial, ".")
+
+        # Check spectrum IDs
+        ids = []
+        for spec in spectra:
+            ids.append(spec.id)
+        if len(list(set(ids))) < len(spectra):
+            print("Non-unique spectrum IDs found. Resetting all IDs.")
+            for i, spec in enumerate(spectra):
+                spectra[i].id = i
+        
+        # Collect dictionary
+        for spec in spectra:
+            id = spec.id
+            spectra_dict[id] = spec.__dict__
+
+        # Create documents from peaks (and losses)
+        MS_documents, MS_documents_intensity, spectra_metadata = create_MS_documents(spectra, num_decimals, 
+                                                                                             peak_loss_words, 
+                                                                                             min_loss, max_loss)
+
+        # Save collected data
+        if collect_new_data == True:
+            spectra_metadata.to_csv(path_json + results_file[:-5] + "_metadata.csv", index=False)
+            
+            functions.dict_to_json(spectra_dict, path_json + results_file)     
+            # Store documents
+            with open(path_json + results_file[:-4] + "txt", "w") as f:
+                for s in MS_documents:
+                    f.write(str(s) +"\n")
+                    
+            with open(path_json + results_file[:-5] + "_intensity.txt", "w") as f:
+                for s in MS_documents_intensity:
+                    f.write(str(s) +"\n")
+
+    return spectra, spectra_dict, MS_documents, MS_documents_intensity, spectra_metadata
+
+
+
+
+def load_MGF_data_old(path_json,
                   mgf_file, 
                  results_file = None,
                  num_decimals = 3,
@@ -592,7 +811,7 @@ def load_MGF_data(path_json,
             spectra.append(spectrum)
 
             
-        # filter out spectra with few peaks
+        # Filter out spectra with few peaks
         min_peaks_absolute = min_peaks
         num_spectra_initial = len(spectra)
         spectra = [copy.deepcopy(x) for x in spectra if len(x.peaks) >= min_peaks_absolute]
