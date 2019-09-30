@@ -215,7 +215,8 @@ class Spectrum(object):
 
 
     def read_spectrum_mgf(self, spectrum_mgf, id):
-        """ Translate pyteomics spectrum into metabolomics.py spectrum object
+        """ Translate spectrum dictionary as created by pyteomics package 
+        into metabolomics.py spectrum object.
         """
         self.id = id
         self.metadata = spectrum_mgf['params']
@@ -255,50 +256,6 @@ class Spectrum(object):
             peaks = process_peaks(peaks, self.min_frag, self.max_frag,
                                   self.min_intensity_perc, self.exp_intensity_filter,
                                   self.min_peaks, self.max_peaks)
-        
-        self.peaks = peaks
-        self.n_peaks = len(peaks)
-
-
-    def read_spectrum_mgf_old(self, spectrum_mgf, id):
-        """ Translate to metabolomics.py type spectrum object into MS_functions.py type spectrum object
-        """
-        self.id = id
-        
-        # Get precursor mass (later used to calculate losses!)
-        if spectrum_mgf.precursor_mz is not None:
-            self.precursor_mz = spectrum_mgf.precursor_mz
-        elif 'precursormass' in spectrum_mgf.metadata:
-            self.precursor_mz = float(spectrum_mgf.metadata['precursormass'])
-        elif 'singlechargeprecursormass' in spectrum_mgf.metadata:
-            self.precursor_mz = float(spectrum_mgf.metadata['precursormass'])
-        elif spectrum_mgf.parent_mz is not None:
-            print("Only found parent mass, not precursor mass!")
-            self.precursor_mz = spectrum_mgf.parent_mz
-        elif 'parentmass' in spectrum_mgf.metadata:
-            print("Only found parent mass, not precursor mass!")
-            self.precursor_mz = float(spectrum_mgf.metadata['parentmass'])
-        else:
-            print(id, spectrum_mgf.precursor_mz)         
-        
-        # Get parent mass
-        if spectrum_mgf.parent_mz is not None:
-            self.parent_mz = spectrum_mgf.parent_mz
-        elif 'parentmass' in spectrum_mgf.metadata:
-            self.parent_mz = float(spectrum_mgf.metadata['parentmass'])
-        else:
-            print(id, spectrum_mgf.parent_mz) 
-        
-        if spectrum_mgf.metadata:
-            self.metadata = spectrum_mgf.metadata
-
-        if 'smiles' in spectrum_mgf.metadata:
-            self.smiles = spectrum_mgf.metadata['smiles']
-
-        peaks = spectrum_mgf.peaks
-        peaks = process_peaks(peaks, self.min_frag, self.max_frag,
-                              self.min_intensity_perc, self.exp_intensity_filter,
-                              self.min_peaks, self.max_peaks)
         
         self.peaks = peaks
         self.n_peaks = len(peaks)
