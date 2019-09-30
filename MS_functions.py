@@ -298,7 +298,7 @@ def process_peaks(peaks, min_frag, max_frag,
     if min_intensity_perc > 0:
         intensity_thres = np.max(peaks[:,1]) * min_intensity_perc/100
         keep_idx = np.where((peaks[:,0] > min_frag) & (peaks[:,0] < max_frag) & (peaks[:,1] > intensity_thres))[0]
-        if (len(keep_idx) < min_peaks):
+        if (len(keep_idx) < min_peaks): 
             # If not enough peaks selected, try again without intensity threshold
             keep_idx2 = np.where((peaks[:,0] > min_frag) & (peaks[:,0] < max_frag))[0]
             peaks = peaks[keep_idx2,:]
@@ -316,7 +316,7 @@ def process_peaks(peaks, min_frag, max_frag,
         peaks2 = peaks.copy()
         peaks2[np.where(peaks2[:,1] == np.max(peaks2[:,1])),:] = 0
         hist, bins = np.histogram(peaks2[:,1], bins=num_bins)
-        start = np.where(hist == np.max(hist))[0][0]  # take maximum intensity bin as starting point
+        start = np.where(hist == np.max(hist))[0][0]  # Take maximum intensity bin as starting point
         last = int(num_bins/2)
         x = bins[start:last]
         y = hist[start:last]
@@ -334,6 +334,7 @@ def process_peaks(peaks, min_frag, max_frag,
         keep_idx = np.where(peaks[:,1] > threshold)[0]
         if len(keep_idx) < min_peaks:
             peaks = peaks[np.lexsort((peaks[:,0], peaks[:,1])),:][-min_peaks:]
+            print("Less than min_peaks above threshold. Keep min_peaks.")
         else:
             peaks = peaks[keep_idx, :]
                   
