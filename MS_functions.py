@@ -611,7 +611,10 @@ def load_MGF_data(path_json,
                 #--------------------------------------------------------------------
 
                 # Scale the min_peak filter
-                min_peaks_scaled = min_peak_scaling(spec['params']['pepmass'][0], min_peaks, peaks_per_mz)
+                if spec['params']['pepmass'][0] is not None:
+                    min_peaks_scaled = min_peak_scaling(spec['params']['pepmass'][0], min_peaks, peaks_per_mz)
+                else:
+                    min_peaks_scaled = min_peaks
                 
                 spectrum = Spectrum(min_frag = min_frag, 
                                     max_frag = max_frag,
