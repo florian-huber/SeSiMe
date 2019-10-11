@@ -611,30 +611,31 @@ def load_MGF_data(path_json,
                 #--------------------------------------------------------------------
 
                 # Scale the min_peak filter
-                if spec['params']['pepmass'][0] is not None:
+                if spec is not None:
                     min_peaks_scaled = min_peak_scaling(spec['params']['pepmass'][0], min_peaks, peaks_per_mz)
+                
+                    spectrum = Spectrum(min_frag = min_frag, 
+                                        max_frag = max_frag,
+                                        min_loss = min_loss, 
+                                        max_loss = max_loss,
+                                        min_intensity_perc = min_intensity_perc,
+                                        exp_intensity_filter = exp_intensity_filter,
+                                        min_peaks = min_peaks_scaled,
+                                        max_peaks = max_peaks)
+                    
+                    id = i #spec.spectrum_id
+                    spectrum.read_spectrum_mgf(spec, id)
+                    spectrum.get_losses
+        
+                    # Calculate losses:
+                    if len(spectrum.peaks) >= min_peaks: 
+                        spectrum.get_losses()
+                    
+                    # Collect in form of list of spectrum objects
+                    spectra.append(spectrum)
+                    
                 else:
-                    min_peaks_scaled = min_peaks
-                
-                spectrum = Spectrum(min_frag = min_frag, 
-                                    max_frag = max_frag,
-                                    min_loss = min_loss, 
-                                    max_loss = max_loss,
-                                    min_intensity_perc = min_intensity_perc,
-                                    exp_intensity_filter = exp_intensity_filter,
-                                    min_peaks = min_peaks_scaled,
-                                    max_peaks = max_peaks)
-                
-                id = i #spec.spectrum_id
-                spectrum.read_spectrum_mgf(spec, id)
-                spectrum.get_losses
-    
-                # Calculate losses:
-                if len(spectrum.peaks) >= min_peaks: 
-                    spectrum.get_losses()
-                
-                # Collect in form of list of spectrum objects
-                spectra.append(spectrum)
+                    print("Found empty spectra for ID: ", i)
             
         # Filter out spectra with few peaks
         min_peaks_absolute = min_peaks
