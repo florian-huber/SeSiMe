@@ -72,6 +72,7 @@ class Spectrum(object):
                  min_loss = 10.0, max_loss = 200.0,
                  min_intensity_perc = 0.0,
                  exp_intensity_filter = 0.01,
+                 peaks_per_mz = 20/200,
                  min_peaks = 10,
                  max_peaks = None,
                  merge_energies = True,
@@ -99,6 +100,7 @@ class Spectrum(object):
             self.exp_intensity_filter = None
         else:
             self.exp_intensity_filter = exp_intensity_filter
+        self.peaks_per_mz = peaks_per_mz
         self.min_peaks = min_peaks
         self.max_peaks = max_peaks
         self.merge_energies = merge_energies
@@ -419,9 +421,9 @@ def load_MS_data(path_data, path_json,
                  min_loss = 10.0, max_loss = 200.0,
                  min_intensity_perc = 0.0,
                  exp_intensity_filter = 0.01,
+                 peaks_per_mz = 20/200,
                  min_peaks = 10,
                  max_peaks = None,
-                 peaks_per_mz = 15/200,
                  merge_energies = True,
                  merge_ppm = 10,
                  replace = 'max',
@@ -481,6 +483,7 @@ def load_MS_data(path_data, path_json,
                         max_loss = max_loss,
                         min_intensity_perc = min_intensity_perc,
                         exp_intensity_filter = None,
+                        peaks_per_mz = peaks_per_mz,
                         min_peaks = min_peaks,
                         max_peaks = max_peaks,
                         merge_energies = merge_energies,
@@ -504,6 +507,7 @@ def load_MS_data(path_data, path_json,
                                 max_loss = max_loss,
                                 min_intensity_perc = min_intensity_perc,
                                 exp_intensity_filter = exp_intensity_filter,
+                                peaks_per_mz = peaks_per_mz,
                                 min_peaks = min_peaks_scaled,
                                 max_peaks = max_peaks,
                                 merge_energies = merge_energies,
@@ -561,9 +565,9 @@ def load_MGF_data(path_json,
                  min_loss = 10.0, max_loss = 200.0,
                  min_intensity_perc = 0.0,
                  exp_intensity_filter = 0.01,
+                 peaks_per_mz = 20/200,
                  min_peaks = 10,
                  max_peaks = None,
-                 peaks_per_mz = 20/200,
                  peak_loss_words = ['peak_', 'loss_']):        
     """ Collect spectra from MGF file
     Based on pyteomics parser.
@@ -620,6 +624,7 @@ def load_MGF_data(path_json,
                                         max_loss = max_loss,
                                         min_intensity_perc = min_intensity_perc,
                                         exp_intensity_filter = exp_intensity_filter,
+                                        peaks_per_mz = peaks_per_mz,
                                         min_peaks = min_peaks_scaled,
                                         max_peaks = max_peaks)
                     
