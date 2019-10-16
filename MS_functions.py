@@ -1,10 +1,26 @@
+#
+# SeSiMe
+#
+# Copyright 2019 Netherlands eScience Center
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 """ Functions specific to MS data
 (e.g. importing and data processing functions)
 
 Florian Huber
 Netherlands eScience Center, 2019
-
-TODO: add liscence
 """
 
 import os
@@ -557,9 +573,8 @@ def load_MS_data(path_data, path_json,
     return spectra, spectra_dict, MS_documents, MS_documents_intensity, spectra_metadata
 
 
-def load_MGF_data(path_json,
-                  mgf_file, 
-                 results_file = None,
+def load_MGF_data(file_mgf, 
+                 file_json = None,
                  num_decimals = 3,
                  min_frag = 0.0, max_frag = 1000.0,
                  min_loss = 10.0, max_loss = 200.0,
@@ -570,7 +585,50 @@ def load_MGF_data(path_json,
                  max_peaks = None,
                  peak_loss_words = ['peak_', 'loss_']):        
     """ Collect spectra from MGF file
-    Based on pyteomics parser.
+    1) Importing MGF file - based on pyteomics parser.
+    2) Filter spectra: can be based on mininum relative intensity or  based on 
+    and exponential intenstiy distribution.
+    3) Create documents with peaks (and losses) as words. Words are constructed 
+    from peak mz values and restricted to 'num_decimals' decimals.
+    
+    Args:
+    -------
+    file_mgf: str
+        MGF file that should be imported.
+    file_json: str
+        File under which already processed data is stored. If not None and if it
+        exists, data will simply be imported from that file.
+        Otherwise data will be imported from file_mgf and final results are stored 
+        under file_json.(default= None).
+    num_decimals: int
+        Number of decimals to keep from each peak-position for creating words.
+    min_frag: float
+        Lower limit of m/z to take into account (Default = 0.0). 
+    max_frag: float
+        Upper limit of m/z to take into account (Default = 1000.0).
+    min_loss: float
+        Lower limit of losses to take into account (Default = 10.0).
+    max_loss: float
+        Upper limit of losses to take into account (Default = 200.0).
+    min_intensity_perc: float
+        Filter out peaks with intensities lower than the min_intensity_perc percentage
+        of the highest peak intensity (Default = 0.0, essentially meaning: OFF).
+    exp_intensity_filter: float
+        Filter out peaks by applying an exponential fit to the intensity histogram.
+        Intensity threshold will be set at where the exponential function will have dropped 
+        to exp_intensity_filter (Default = 0.01).
+    peaks_per_mz: float
+        Factor to describe linear increase of mininum peaks per spectrum with increasing
+        parentmass. Formula is: int(min_peaks + peaks_per_mz * parentmass).
+    min_peaks: int
+        Minimum number of peaks to keep, unless less are present from the start (Default = 10).
+    merge_energies: bool
+        Merge close peaks or not (False | True, Default is True).
+    merge_ppm: int
+        Merge peaks if their m/z is <= 1e6*merge_ppm (Default = 10).
+    replace: 'max' or None
+        If peaks are merged, either the heighest intensity of both is taken ('max'), 
+        or their intensitites are added (None). 
     """
     
     spectra = []
@@ -579,36 +637,36 @@ def load_MGF_data(path_json,
     MS_documents_intensity = []
     collect_new_data = True
         
-    if results_file is not None:
+    if file_json is not None:
         try: 
-            spectra_dict = functions.json_to_dict(path_json + results_file)
-            spectra_metadata = pd.read_csv(path_json + results_file[:-5] + "_metadata.csv")
+            spectra_dict = functions.json_to_dict(file_json)
+            spectra_metadata = pd.read_csv(file_json[:-5] + "_metadata.csv")
             print("Spectra json file found and loaded.")
             spectra = dict_to_spectrum(spectra_dict)
             collect_new_data = False
             
-            with open(path_json + results_file[:-4] + "txt", "r") as f:
+            with open(file_json[:-4] + "txt", "r") as f:
                 for line in f:
                     line = line.replace('"', '').replace("'", "").replace("[", "").replace("]", "").replace("\n", "")
                     MS_documents.append(line.split(", "))
                     
-            with open(path_json + results_file[:-5] + "_intensity.txt", "r") as f:
+            with open(file_json[:-5] + "_intensity.txt", "r") as f:
                 for line in f:
                     line = line.replace("[", "").replace("]", "")
                     MS_documents_intensity.append([int(x) for x in line.split(", ")])
                 
         except FileNotFoundError: 
-            print("Could not find file ", path_json,  results_file) 
-            print("Data will be imported from ", mgf_file)
+            print("Could not find file ", file_json) 
+            print("Data will be imported from ", file_mgf)
 
     # Read data from files if no pre-stored data is found:
-    if spectra_dict == {} or results_file is None:
+    if spectra_dict == {} or file_json is None:
         
         # Scale the min_peak filter
         def min_peak_scaling(x, A, B):
             return int(A + B * x)
 
-        with mgf.MGF(mgf_file) as reader:
+        with mgf.MGF(file_mgf) as reader:
             for i, spec in enumerate(reader):
         
                 # Make conform with spectrum class as defined in MS_functions.py
@@ -669,15 +727,15 @@ def load_MGF_data(path_json,
 
         # Save collected data
         if collect_new_data == True:
-            spectra_metadata.to_csv(path_json + results_file[:-5] + "_metadata.csv", index=False)
+            spectra_metadata.to_csv(file_json[:-5] + "_metadata.csv", index=False)
             
-            functions.dict_to_json(spectra_dict, path_json + results_file)     
+            functions.dict_to_json(spectra_dict, file_json)     
             # Store documents
-            with open(path_json + results_file[:-4] + "txt", "w") as f:
+            with open(file_json[:-4] + "txt", "w") as f:
                 for s in MS_documents:
                     f.write(str(s) +"\n")
                     
-            with open(path_json + results_file[:-5] + "_intensity.txt", "w") as f:
+            with open(file_json[:-5] + "_intensity.txt", "w") as f:
                 for s in MS_documents_intensity:
                     f.write(str(s) +"\n")
 
