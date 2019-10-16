@@ -1395,10 +1395,19 @@ def fast_cosine_shift2(spectrum1, spectrum2, tol, max_mz):
 def fast_cosine_shift_hungarian(spectrum1, 
                                 spectrum2, 
                                 tol, 
-#                                min_match, 
                                 min_intens=0):
     """ Taking full care of weighted bipartite matching problem:
         Use Hungarian algorithm (slow...)
+    
+    Args:
+    --------
+    spectrum1: Spectrum object    
+    spectrum2: Spectrum object
+    tol: float
+        Tolerance value to define how far two peaks can be apart to still count as match.
+    min_intens: float
+        Minimum intensity (relative to max.intensity peak in spectrum). Peaks with lower
+        intensity will be ignored --> higher min_intens is faster, but less precise.
     """
     if len(spectrum1.peaks) == 0 or len(spectrum2.peaks) == 0:
         return 0.0,[]
@@ -1406,11 +1415,11 @@ def fast_cosine_shift_hungarian(spectrum1,
     spec1 = np.array(spectrum1.peaks, dtype=float)
     spec2 = np.array(spectrum2.peaks, dtype=float)
     
-    # normalize intensities:
+    # Normalize intensities:
     spec1[:,1] = spec1[:,1]/max(spec1[:,1])
     spec2[:,1] = spec2[:,1]/max(spec2[:,1])
     
-    # filter, if wanted:
+    # Filter, if wanted:
     spec1 = spec1[spec1[:,1] > min_intens,:]
     spec2 = spec2[spec2[:,1] > min_intens,:]
     zero_pairs = find_pairs(spec1, spec2, tol, shift=0.0)
@@ -1433,7 +1442,6 @@ def fast_cosine_shift_hungarian(spectrum1,
     matrix_size = max(len(set1), len(set2))    
     matrix = np.ones((matrix_size, matrix_size))
 
-    # TODO: Add min_match criteria!
     if len(matching_pairs) > 0:
         for m in matching_pairs:
             matrix[list1.index(m[0]),list2.index(m[1])] = 1 - m[2]
@@ -1441,11 +1449,14 @@ def fast_cosine_shift_hungarian(spectrum1,
         row_ind, col_ind = linear_sum_assignment(matrix)
         score = matrix.shape[0] - matrix[row_ind, col_ind].sum()
         
+        """# TODO: Add min_match criteria!
         if np.sum(matrix[row_ind, col_ind] != 1) < min_match:
             score = 0.0
         else:      
             # normalize score:
             score = score/max(np.sum(spec1[:,1]**2), np.sum(spec2[:,1]**2))
+        """
+        score = score/max(np.sum(spec1[:,1]**2), np.sum(spec2[:,1]**2))
     else:
         score = 0.0
     
@@ -1558,7 +1569,7 @@ def cosine_matrix(spectra,
                 parameter_collection.append([spectra[i], spectra[j], i, j, tol, min_intens, counter])
                 counter += 1
 
-            # Create a pool of processes. For instance one for each CPU in your machine.
+            # Create a pool of processes. For instance one for each core in your machine.
             cosine_pairs = []
             with ThreadPoolExecutor(max_workers=num_workers) as executor:
                 futures = [executor.submit(cosine_pair, X, len(spectra)) for X in parameter_collection]
