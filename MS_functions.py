@@ -1309,6 +1309,19 @@ From Simon Rogers
 molnet
 """
 def fast_cosine_shift(spectrum1, spectrum2, tol, min_intens = 0):
+    """ Calculate cosine score between spectrum1 and spectrum2. Will shift the spectra
+    with respect to each other by difference in their parentmasses.
+    
+    Args:
+    --------
+    spectrum1: Spectrum object    
+    spectrum2: Spectrum object
+    tol: float
+        Tolerance value to define how far two peaks can be apart to still count as match.
+    min_intens: float
+        Minimum intensity (relative to max.intensity peak in spectrum). Peaks with lower
+        intensity will be ignored --> higher min_intens is faster, but less precise.
+    """
     if len(spectrum1.peaks) == 0 or len(spectrum2.peaks) == 0:
         return 0.0,[]
 
@@ -1343,14 +1356,12 @@ def fast_cosine_shift(spectrum1, spectrum2, tol, min_intens = 0):
             used1.add(m[0])
             used2.add(m[1])
             used_matches.append(m)
-    
-#    if len(used_matches) < min_match:
-#        score = 0.0
-#    else:     
+     
     # Normalize score:
     score = score/max(np.sum(spec1[:,1]**2), np.sum(spec2[:,1]**2))
     
     return score, used_matches
+
 
 
 def fast_cosine_shift2(spectrum1, spectrum2, tol, max_mz):

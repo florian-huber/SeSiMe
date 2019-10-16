@@ -1,8 +1,20 @@
-"""
-Small helperfunctions for the omics project (NLeSC, 2018, 2019..)
-
-@author: FlorianHuber
-"""
+#
+# Spec2Vec
+#
+# Copyright 2019 Netherlands eScience Center
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 
 from __future__ import print_function
 import numpy as np
@@ -21,11 +33,19 @@ def preprocess_document(corpus, stopwords, min_frequency = 2):
     - Remove common words from stopwords and tokenize
     - Only include words that appear at least *min_frequency* times. Default = 2
     - Set words to lower case.
+    
+    Args:
+    -------
+    corpus: list
+        Corpus of documents.
+    stopwords: list
+        List of stopwords to exclude from documents.
+    min_frequency: int
+        Minimum total occurence of a word necessary to be included in processed corpus.
     """
-
     corpus_lowered = [[word.lower() for word in document if word not in stopwords] for document in corpus]
 
-    # remove words that appear only once
+    # Remove words that appear only once
     from collections import defaultdict
     
     frequency = defaultdict(int)
@@ -38,16 +58,26 @@ def preprocess_document(corpus, stopwords, min_frequency = 2):
     return corpus_lowered, frequency
 
 
-
-
-def create_distance_network(Cdistances_ids, Cdistances, filename="word2vec_test.graphml", 
+def create_distance_network(Cdistances_ids, 
+                            Cdistances, 
+                            filename="word2vec_test.graphml", 
                             cutoff_dist = 0.1,
                             max_connections = 25,
                             min_connections = 2):
-    """ Built network from closest connections found
-        Using networkx
+    """ Built network from closest connections found.
+        Using networkx.
         
-        TODO: Add maximum number of connections 
+    Args:
+    -------
+    Cdistances_ids
+    Cdistances
+    filename: str
+    cutoff_dist: float
+    max_connections: int
+    min_connections: int
+    
+    TODO: Add maximum number of connections 
+    TODO: complete documentation
     """
     
     dimension = Cdistances_ids.shape[0]
@@ -106,9 +136,7 @@ def full_wv(vocab_size, word_idx, word_count):
 ## 
 
 def ifd_scores(vocabulary, corpus):
-    """ Calulate idf score (Inverse Document Frequency score) for all words in vocabulary over a given corpus
-    
-    
+    """ Calulate idf score (Inverse Document Frequency score) for all words in vocabulary over a given corpus 
     
     Args:
     --------
@@ -143,8 +171,6 @@ def ifd_scores(vocabulary, corpus):
     return pd.DataFrame(idf_scores, columns=["id", "word", "word count", "idf score"])
 
 
-
-
 def calculate_similarities(vectors, num_hits=25, method='cosine'):
     """ Calculate similarities (all-versus-all --> matrix) based on array of all vectors
     
@@ -168,5 +194,3 @@ def calculate_similarities(vectors, num_hits=25, method='cosine'):
         list_similars[i,:] = 1- Cdist[i, list_similars_ids[i,:]]
     
     return list_similars_ids, list_similars, mean_similarity
-
-

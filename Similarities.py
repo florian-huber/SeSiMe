@@ -1,3 +1,21 @@
+#
+# Spec2Vec
+#
+# Copyright 2019 Netherlands eScience Center
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 from __future__ import print_function
 
 import os
@@ -18,7 +36,6 @@ from keras.models import Model, Sequential
 from keras.layers import Input, Dense
 
 import helper_functions as functions
-
 
        
 class EpochLogger(CallbackAny2Vec):
@@ -248,7 +265,20 @@ class SimilarityMeasures():
             
     def build_model_lda(self, file_model_lda, num_of_topics=100, num_pass=4, 
                         num_iter=100, use_stored_model=True):
-        """ Build LDA model (using gensim)
+        """ Build LDA model (using gensim).
+                
+        Args:
+        --------
+        file_model_lda: str,
+            Filename to save model (or load model if it exists under this name).
+        num_of_topics: int,
+            Number of topics to sort feature into (default = 100).
+        num_pass: int,
+            Number of passes through the corpus during training.
+       num_iter: int,
+            Number of training iterations (default=100). 
+        use_stored_model: bool,
+            Load stored model if True, else train new model.
         """
         
         # Check if model already exists and should be loaded
@@ -272,7 +302,18 @@ class SimilarityMeasures():
         
     def build_model_lsi(self, file_model_lsi, num_of_topics=100, 
                         num_iter=10, use_stored_model=True):
-        """ Build LDA model (using gensim)
+        """ Build LSI model (using gensim).
+        
+        Args:
+        --------
+        file_model_lsi: str,
+            Filename to save model (or load model if it exists under this name).
+        num_of_topics: int,
+            Number of topics to sort feature into (default = 100).
+        num_iter: int,
+            Number of training iterations (default=100). 
+        use_stored_model: bool,
+            Load stored model if True, else train new model.
         """
         
         # Check if model already exists and should be loaded
